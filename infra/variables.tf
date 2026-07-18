@@ -25,7 +25,7 @@ variable "localstack_endpoint" {
 }
 
 variable "name_prefix" {
-  description = "Prefix for resource names (buckets, queues, etc.)."
+  description = "Prefix for resource names (buckets, queues, tables, etc.)."
   type        = string
   default     = "thumbnail"
 }
@@ -38,6 +38,12 @@ variable "input_bucket_name" {
 
 variable "output_bucket_name" {
   description = "Override for the output (thumbnail) bucket name. Defaults to \"<name_prefix>-output\"."
+  type        = string
+  default     = null
+}
+
+variable "jobs_table_name" {
+  description = "Override for the DynamoDB jobs table name. Defaults to \"<name_prefix>-jobs\"."
   type        = string
   default     = null
 }

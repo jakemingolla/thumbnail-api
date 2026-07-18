@@ -67,12 +67,26 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" s3 ls
 
 (`awslocal s3 ls` is equivalent if installed.) Terraform outputs `input_bucket_name` / `output_bucket_name` after apply.
 
+### Verify DynamoDB jobs table
+
+Default name (from `name_prefix`, default `thumbnail`): `thumbnail-jobs`. Override: `jobs_table_name`. Terraform output: `jobs_table_name` (for later `JOBS_TABLE` Lambda env).
+
+```bash
+set -a && source .localstack.env && set +a
+TABLE=$(cd infra && terraform output -raw jobs_table_name)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb describe-table --table-name "$TABLE"
+# expect: TableName thumbnail-jobs, KeySchema HASH AttributeName job_id, BillingMode PAY_PER_REQUEST
+```
+
+(`awslocal dynamodb describe-table --table-name "$TABLE"` is equivalent if installed.)
+
 ## Files
 
 | Path | Role |
 |------|------|
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
-| `infra/` | Terraform root (LocalStack AWS provider + S3 buckets) |
+| `infra/` | Terraform root (LocalStack AWS provider + resources) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
 | `infra/s3.tf` | Input / output buckets + input-bucket CORS |
+| `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
