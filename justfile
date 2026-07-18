@@ -42,6 +42,18 @@ dev:
 
 alias run := dev
 
+# Allocate unique LocalStack ports/names for this worktree and start
+localstack-up:
+    ./scripts/localstack-up.sh
+
+# Stop LocalStack and remove containers, volumes, env, and local tfstate
+localstack-down:
+    ./scripts/localstack-down.sh
+
+# Fail if this worktree still has LocalStack leftovers (required before PR)
+localstack-assert-clean:
+    ./scripts/localstack-assert-clean.sh
+
 # Serve OpenAPI Swagger UI locally (no LocalStack required)
 # Open the printed URL in a browser. Ctrl+C to stop.
 swagger port="8090":

@@ -3,7 +3,9 @@
 .ruff_cache
 *.pyc
 .env
+.localstack.env
 .localstack/
+.localstack-*/
 
 # Terraform (local state / LocalStack)
 infra/.terraform/

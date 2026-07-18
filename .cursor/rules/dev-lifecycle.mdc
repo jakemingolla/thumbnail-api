@@ -1,0 +1,6 @@
+---
+description: LocalStack workspace start/stop/isolation lifecycle
+alwaysApply: true
+---
+
+Follow `docs/agents/dev-lifecycle.md`.
