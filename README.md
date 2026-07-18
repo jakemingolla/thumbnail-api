@@ -1,8 +1,8 @@
-# python-template
+# thumbnail-api
 
-A minimal Python project template with [uv](https://docs.astral.sh/uv/), strict typing (basedpyright), linting (ruff), and pytest.
+A Python project with [uv](https://docs.astral.sh/uv/), strict typing (basedpyright), linting (ruff), and pytest.
 
-Application code lives in the installable package `python_template` under `src/python_template/`. After `just install` (`uv sync`), imports resolve like a normal package (`import python_template`).
+Application code lives in the installable package `thumbnail_api` under `src/thumbnail_api/`. After `just install` (`uv sync`), imports resolve like a normal package (`import thumbnail_api`).
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Clone the repo, install dependencies, and run tests:
 
 ```bash
 git clone <repo-url>
-cd python-template
+cd thumbnail-api
 just install
 just test
 ```
@@ -25,28 +25,12 @@ just test
 
 ## Configuration (`.env`)
 
-Runtime settings live in a `.env` file at the project root (gitignored). Values are loaded by [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) via `get_config()` — see `src/python_template/config/types.py` for the schema and `src/python_template/config/main.py` for the factory.
+Runtime settings live in a `.env` file at the project root (gitignored). Values are loaded by [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) via `get_config()` — see `src/thumbnail_api/config/types.py` for the schema and `src/thumbnail_api/config/main.py` for the factory.
 
 Create `.env` before running `just dev`:
 
 ```dotenv
-OPENAI_API_KEY=your-key-here
-# optional; defaults to gpt-4o-mini
-DEFAULT_MODEL=gpt-4o-mini
+environment=development
 ```
 
-Environment variable names use uppercase with underscores; they map to the snake_case fields on `Config` (e.g. `openai_api_key` → `OPENAI_API_KEY`).
-
-## Templating a new project
-
-Rename the package in one pass so the directory, imports, project metadata, and entrypoint stay aligned:
-
-1. Rename `src/python_template/` to `src/<your_package>/` (import name: letters, numbers, underscores).
-2. Set `project.name` in `pyproject.toml` to the distribution name (hyphens OK; it should normalize to the same import name).
-3. Point `[tool.hatch.build.targets.wheel].packages` at `src/<your_package>`.
-4. Update the `just dev` module path (`python -m <your_package>.main`) and any `import` / `from` lines that still say `python_template`.
-5. Refresh `README.md` (title, paths, and this section) for the new name.
-
-Also update `description` and application logic in `src/<your_package>/main.py` and `src/<your_package>/config/types.py` as needed.
-
-Keep the justfile, lint/type-check config, and test layout unless your project needs different tooling.
+Environment variable names use uppercase with underscores; they map to the snake_case fields on `Config` (e.g. `environment` → `ENVIRONMENT`).
