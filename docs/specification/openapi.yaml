@@ -1,0 +1,263 @@
+openapi: 3.0.3
+info:
+  title: Thumbnail API
+  version: "1.0.0"
+  description: |
+    JSON-only jobs API for the thumbnail pipeline (v1).
+
+    Normative prose: `docs/specification/api.md`. This file must stay consistent with that contract.
+    Image bytes never pass through these endpoints; clients upload via the presigned URL from `POST /jobs`.
+servers:
+  - url: http://localhost:4566/_aws/execute-api/{apiId}/{stage}
+    description: LocalStack REST API Gateway (path-style execute-api)
+    variables:
+      apiId:
+        default: apiId
+      stage:
+        default: dev
+tags:
+  - name: jobs
+    description: Job create and status polling
+paths:
+  /jobs:
+    post:
+      tags: [jobs]
+      operationId: createJob
+      summary: Create a job and presigned upload URL
+      description: |
+        Creates a job in `pending` status and returns a presigned S3 PUT URL.
+        Clients must PUT image bytes to `upload_url`, not to this API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+            example:
+              content_type: image/jpeg
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateJobResponse"
+              example:
+                job_id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                upload_url: http://localhost:4566/thumbnail-input/uploads/a1b2c3d4-e5f6-7890-abcd-ef1234567890/original?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
+                input_key: uploads/a1b2c3d4-e5f6-7890-abcd-ef1234567890/original
+                status: pending
+        "400":
+          description: Invalid JSON, missing/unknown fields, or unsupported content_type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_request:
+                  value:
+                    error:
+                      code: invalid_request
+                      message: content_type is required
+                invalid_json:
+                  value:
+                    error:
+                      code: invalid_json
+                      message: Request body must be valid JSON
+                unsupported_content_type:
+                  value:
+                    error:
+                      code: unsupported_content_type
+                      message: content_type must be one of image/jpeg, image/png, image/webp
+        "415":
+          description: Content-Type is not application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: unsupported_media_type
+                  message: Content-Type must be application/json
+        "500":
+          description: Unexpected server failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: internal_error
+                  message: Unexpected error
+  /jobs/{job_id}:
+    get:
+      tags: [jobs]
+      operationId: getJob
+      summary: Get job status
+      description: Returns the current job document for client polling until complete or failed.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+              examples:
+                processing:
+                  value:
+                    job_id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                    status: processing
+                    input_key: uploads/a1b2c3d4-e5f6-7890-abcd-ef1234567890/original
+                    sizes:
+                      "128":
+                        status: complete
+                        output_key: thumbnails/a1b2c3d4-e5f6-7890-abcd-ef1234567890/128.jpg
+                      "256":
+                        status: processing
+                        output_key: null
+                      "512":
+                        status: pending
+                        output_key: null
+                    created_at: "2026-07-18T22:00:00Z"
+                    updated_at: "2026-07-18T22:00:05Z"
+                complete:
+                  value:
+                    job_id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                    status: complete
+                    input_key: uploads/a1b2c3d4-e5f6-7890-abcd-ef1234567890/original
+                    sizes:
+                      "128":
+                        status: complete
+                        output_key: thumbnails/a1b2c3d4-e5f6-7890-abcd-ef1234567890/128.jpg
+                      "256":
+                        status: complete
+                        output_key: thumbnails/a1b2c3d4-e5f6-7890-abcd-ef1234567890/256.jpg
+                      "512":
+                        status: complete
+                        output_key: thumbnails/a1b2c3d4-e5f6-7890-abcd-ef1234567890/512.jpg
+                    created_at: "2026-07-18T22:00:00Z"
+                    updated_at: "2026-07-18T22:00:12Z"
+        "400":
+          description: job_id is not a valid UUID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: invalid_job_id
+                  message: job_id must be a UUID
+        "404":
+          description: No job exists for the given job_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: not_found
+                  message: Job not found
+        "500":
+          description: Unexpected server failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: internal_error
+                  message: Unexpected error
+components:
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      description: Job identifier (UUID)
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateJobRequest:
+      type: object
+      additionalProperties: false
+      required: [content_type]
+      properties:
+        content_type:
+          type: string
+          description: MIME type of the image that will be uploaded via the presigned URL
+          enum: [image/jpeg, image/png, image/webp]
+    CreateJobResponse:
+      type: object
+      additionalProperties: false
+      required: [job_id, upload_url, input_key, status]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        upload_url:
+          type: string
+          format: uri
+          description: Presigned S3 PUT URL; image bytes go here, not through the API
+        input_key:
+          type: string
+          description: S3 object key the upload targets
+        status:
+          type: string
+          enum: [pending]
+    SizeStatus:
+      type: object
+      additionalProperties: false
+      required: [status, output_key]
+      properties:
+        status:
+          type: string
+          enum: [pending, processing, complete, failed]
+        output_key:
+          type: string
+          nullable: true
+          description: Output object key when status is complete; null otherwise
+    Job:
+      type: object
+      additionalProperties: false
+      required: [job_id, status, input_key, sizes, created_at, updated_at]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, complete, failed]
+        input_key:
+          type: string
+        sizes:
+          type: object
+          description: Map of size label (e.g. "128") to per-size status
+          additionalProperties:
+            $ref: "#/components/schemas/SizeStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ErrorBody:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code
+        message:
+          type: string
+          description: Human-readable explanation
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorBody"
