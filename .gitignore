@@ -4,3 +4,12 @@
 *.pyc
 .env
 .localstack/
+
+# Terraform (local state / LocalStack)
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.*
+infra/crash.log
+infra/crash.*.log
+infra/*.tfvars
+!infra/*.tfvars.example
