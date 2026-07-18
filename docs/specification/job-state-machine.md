@@ -124,7 +124,21 @@ Clients polling `GET /jobs/{job_id}` must treat `complete` and `failed` as done;
 
 ## Retries and DLQ
 
-SQS provides at-least-once delivery. A redrive policy moves a message to the DLQ after `maxReceiveCount` receives (concrete integer is set in Terraform / THUMB-008; this document owns the **failure semantics**).
+SQS provides at-least-once delivery. A redrive policy moves a message to the DLQ after `maxReceiveCount` receives.
+
+### Concrete queue settings (v1)
+
+| Setting | Value | Where configured |
+|---------|-------|------------------|
+| Work queue name | `{name_prefix}-work` (default `thumbnail-work`) | Terraform `infra/sqs.tf` |
+| DLQ name | `{name_prefix}-work-dlq` (default `thumbnail-work-dlq`) | Terraform `infra/sqs.tf` |
+| `maxReceiveCount` | **5** | Terraform `var.sqs_max_receive_count` (default 5) |
+
+**`maxReceiveCount = 5`:** A message is redriven to the DLQ after five receives without a successful delete. That gives workers four transient retries after the first delivery, then a final attempt on the fifth receive. On that fifth receive (`ApproximateReceiveCount >= 5`), the worker must treat the attempt as exhausted retries per [Exhausted retries (redrive)](#exhausted-retries-redrive) — mark the size `failed`, apply rollup, and allow the invocation to fail so SQS redrives the message.
+
+Changing `maxReceiveCount` is a contract change: update this table and the Terraform variable default together.
+
+Visibility timeout and retention are Terraform operational knobs (`var.sqs_visibility_timeout_seconds`, etc.); they are not part of the status contract, but visibility timeout must remain long enough for a single worker invocation.
 
 ### Transient vs permanent errors
 
@@ -135,7 +149,7 @@ SQS provides at-least-once delivery. A redrive policy moves a message to the DLQ
 
 ### Exhausted retries (redrive)
 
-When a message’s approximate receive count has reached `maxReceiveCount` (last attempt before redrive), and the worker still cannot complete the size:
+When a message’s approximate receive count has reached `maxReceiveCount` (**5** in v1; last attempt before redrive), and the worker still cannot complete the size:
 
 1. The worker must set that size to `failed`.
 2. The worker must apply job rollup (overall becomes `failed` if not already terminal).
