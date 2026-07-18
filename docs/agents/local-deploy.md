@@ -57,6 +57,18 @@ State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that st
 
 Application boto3 S3 clients must also use path-style addressing (`addressing_style=path`) and `endpoint_url` from `AWS_ENDPOINT_URL` — see `src/thumbnail_api/config/clients.py`.
 
+### Verify S3 buckets
+
+Default names (from `name_prefix`, default `thumbnail`): `thumbnail-input`, `thumbnail-output`. Overrides: `input_bucket_name` / `output_bucket_name`.
+
+```bash
+set -a && source .localstack.env && set +a
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" s3 ls
+# expect: thumbnail-input and thumbnail-output
+```
+
+(`awslocal s3 ls` is equivalent if installed.) Terraform outputs `input_bucket_name` / `output_bucket_name` after apply.
+
 ### Verify DynamoDB jobs table
 
 Default name (from `name_prefix`, default `thumbnail`): `thumbnail-jobs`. Override: `jobs_table_name`. Terraform output: `jobs_table_name` (for later `JOBS_TABLE` Lambda env).
@@ -115,6 +127,7 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
 | `infra/` | Terraform root (LocalStack AWS provider + resources) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
+| `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |

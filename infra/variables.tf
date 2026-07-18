@@ -30,6 +30,18 @@ variable "name_prefix" {
   default     = "thumbnail"
 }
 
+variable "input_bucket_name" {
+  description = "Override for the input (upload) bucket name. Defaults to \"<name_prefix>-input\"."
+  type        = string
+  default     = null
+}
+
+variable "output_bucket_name" {
+  description = "Override for the output (thumbnail) bucket name. Defaults to \"<name_prefix>-output\"."
+  type        = string
+  default     = null
+}
+
 variable "jobs_table_name" {
   description = "Override for the DynamoDB jobs table name. Defaults to \"<name_prefix>-jobs\"."
   type        = string

@@ -6,13 +6,13 @@ Bucket **names** are configuration. Key **layout** is fixed.
 
 ## Bucket roles
 
-| Role | Config variable (illustrative) | Purpose |
-|------|--------------------------------|---------|
-| Input | `INPUT_BUCKET` | Client uploads of the original image |
-| Output | `OUTPUT_BUCKET` | Worker-written thumbnail objects |
+| Role | Config variable (illustrative) | Local default name | Purpose |
+|------|--------------------------------|--------------------|---------|
+| Input | `INPUT_BUCKET` | `thumbnail-input` | Client uploads of the original image |
+| Output | `OUTPUT_BUCKET` | `thumbnail-output` | Worker-written thumbnail objects |
 
-- Input and output **may** be the same physical bucket or different buckets.
-- Callers must resolve the correct role for each operation; they must not hard-code bucket names.
+- Local Terraform creates **separate** input and output buckets (defaults above; overridable via `input_bucket_name` / `output_bucket_name`, or `name_prefix`).
+- Input and output **may** be the same physical bucket in other environments; callers must resolve the correct role for each operation and must not hard-code bucket names.
 - Key prefixes below are relative to the bucket for that role (not namespaced by bucket name inside the key).
 
 ## Identifiers
@@ -109,13 +109,14 @@ Local development uses LocalStack (or equivalent) as the S3 endpoint.
 
 Production AWS addressing may use the platform default (virtual-hosted–style); this path-style requirement applies to LocalStack-backed environments.
 
-## CORS (non-normative note)
+## CORS
 
-Browser-based uploads to presigned input URLs may require a CORS configuration on the input bucket. Fine-tuning CORS is out of scope for this document.
+- Non-browser clients (CLI, SDKs) do not use CORS; they can `PUT` to presigned input URLs without a bucket CORS configuration.
+- Local Terraform **does** attach a permissive CORS rule on the **input** bucket (`GET` / `HEAD` / `PUT`, `allowed_origins = ["*"]`, `allowed_headers = ["*"]`) so browser clients can upload via presigned URLs. The **output** bucket has no CORS configuration.
+- Production CORS origins and headers are environment-specific; tighten as needed. This document does not require a particular production CORS policy.
 
 ## Out of scope
 
 - CloudFront distributions and public bucket policies
-- CORS rule details beyond the note above
 - Lifecycle, retention, and encryption settings
 - The concrete set of thumbnail `size` values and pixel dimensions
