@@ -25,7 +25,19 @@ variable "localstack_endpoint" {
 }
 
 variable "name_prefix" {
-  description = "Prefix for resource names added by later tickets."
+  description = "Prefix for resource names (buckets, queues, etc.)."
   type        = string
   default     = "thumbnail"
+}
+
+variable "input_bucket_name" {
+  description = "Override for the input (upload) bucket name. Defaults to \"<name_prefix>-input\"."
+  type        = string
+  default     = null
+}
+
+variable "output_bucket_name" {
+  description = "Override for the output (thumbnail) bucket name. Defaults to \"<name_prefix>-output\"."
+  type        = string
+  default     = null
 }

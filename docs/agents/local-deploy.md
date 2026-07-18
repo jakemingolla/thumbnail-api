@@ -49,19 +49,30 @@ set -a && source ../.localstack.env && set +a
 terraform apply -auto-approve -var="localstack_endpoint=${LOCALSTACK_ENDPOINT}"
 ```
 
-Empty/near-empty root module is expected until resource tickets add S3/SQS/DynamoDB/Lambda.
-
 State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that state with the LocalStack instance — see [`dev-lifecycle.md`](dev-lifecycle.md).
 
 ### Constraint: path-style S3
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
+### Verify S3 buckets
+
+Default names (from `name_prefix`, default `thumbnail`): `thumbnail-input`, `thumbnail-output`. Overrides: `input_bucket_name` / `output_bucket_name`.
+
+```bash
+set -a && source .localstack.env && set +a
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" s3 ls
+# expect: thumbnail-input and thumbnail-output
+```
+
+(`awslocal s3 ls` is equivalent if installed.) Terraform outputs `input_bucket_name` / `output_bucket_name` after apply.
+
 ## Files
 
 | Path | Role |
 |------|------|
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
-| `infra/` | Terraform root (LocalStack AWS provider + placeholders) |
+| `infra/` | Terraform root (LocalStack AWS provider + S3 buckets) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
+| `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
