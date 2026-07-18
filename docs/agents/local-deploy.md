@@ -55,6 +55,8 @@ State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that st
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
+Application boto3 S3 clients must also use path-style addressing (`addressing_style=path`) and `endpoint_url` from `AWS_ENDPOINT_URL` — see `src/thumbnail_api/config/clients.py`.
+
 ### Verify DynamoDB jobs table
 
 Default name (from `name_prefix`, default `thumbnail`): `thumbnail-jobs`. Override: `jobs_table_name`. Terraform output: `jobs_table_name` (for later `JOBS_TABLE` Lambda env).
@@ -82,6 +84,30 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 (`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
 
+## Lambda / app environment variables
+
+Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.py`). Missing required values fail fast.
+
+### Required
+
+| Variable | Purpose |
+|----------|---------|
+| `ENVIRONMENT` | Runtime environment label |
+| `INPUT_BUCKET` | S3 bucket for original uploads |
+| `OUTPUT_BUCKET` | S3 bucket for thumbnail objects |
+| `JOBS_TABLE` | DynamoDB jobs table name |
+| `QUEUE_URL` | SQS work queue URL |
+| `AWS_ENDPOINT_URL` | LocalStack edge URL for boto3 (`endpoint_url`) |
+
+Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when running against this worktree’s LocalStack.
+
+### Optional
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AWS_REGION` | `us-east-1` | Region passed to boto3 clients |
+| `THUMBNAIL_SIZES` | `128,256,512` | Comma-separated thumbnail sizes (pixels); must match `docs/specification/sqs-messages.md` unless that contract is updated |
+
 ## Files
 
 | Path | Role |
@@ -91,4 +117,6 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
+| `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |
+| `.env.example` | Sample Lambda/app env var names for local runs |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
