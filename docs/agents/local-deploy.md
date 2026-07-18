@@ -55,6 +55,19 @@ State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that st
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
+### Verify DynamoDB jobs table
+
+Default name (from `name_prefix`, default `thumbnail`): `thumbnail-jobs`. Override: `jobs_table_name`. Terraform output: `jobs_table_name` (for later `JOBS_TABLE` Lambda env).
+
+```bash
+set -a && source .localstack.env && set +a
+TABLE=$(cd infra && terraform output -raw jobs_table_name)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb describe-table --table-name "$TABLE"
+# expect: TableName thumbnail-jobs, KeySchema HASH AttributeName job_id, BillingMode PAY_PER_REQUEST
+```
+
+(`awslocal dynamodb describe-table --table-name "$TABLE"` is equivalent if installed.)
+
 ### SQS queues (after apply)
 
 Terraform creates `{name_prefix}-work` and `{name_prefix}-work-dlq` (defaults `thumbnail-work`, `thumbnail-work-dlq`). Useful outputs: `work_queue_url`, `work_queue_arn`, `work_dlq_url`, `work_dlq_arn`, `sqs_max_receive_count`.
@@ -76,5 +89,6 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
 | `infra/` | Terraform root (LocalStack AWS provider + resources) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
+| `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |

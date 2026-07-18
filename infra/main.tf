@@ -1,1 +1,4 @@
-# Resource definitions: SQS in sqs.tf; S3/DynamoDB/Lambda/API Gateway in follow-on tickets.
+# Root module for LocalStack. Resource files:
+#   dynamodb.tf — jobs table (partition key job_id)
+#   sqs.tf — work queue + DLQ + redrive
+# Follow-on: S3, Lambda, API Gateway.
