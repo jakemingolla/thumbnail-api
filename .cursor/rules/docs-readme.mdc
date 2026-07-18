@@ -1,0 +1,10 @@
+---
+description: Read docs/README.md for doc audience and language conventions
+alwaysApply: true
+---
+
+# Docs orientation
+
+Before writing or editing project docs, read `docs/README.md`.
+
+It defines the three doc audiences (agents, human, specifications) and the language/purpose expectations for each. Match new and updated docs to the correct set.
