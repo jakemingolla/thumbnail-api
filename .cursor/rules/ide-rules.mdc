@@ -1,0 +1,6 @@
+---
+description: Keep IDE/vendor rules as pointers; critical guidance lives in docs/
+alwaysApply: true
+---
+
+Follow `docs/agents/ide-rules.md`.
