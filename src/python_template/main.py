@@ -3,8 +3,7 @@ from .config.types import Config
 
 
 def run(config: Config) -> None:
-    print("Hello from python-template!")
-    print(f"The default model is {config.default_model}.")
+    print(f"Hello from python-template! The environment is {config.environment}.")
 
 
 def main() -> None:
