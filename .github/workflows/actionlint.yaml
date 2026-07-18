@@ -1,0 +1,16 @@
+name: 🧹 Actionlint
+on: pull_request
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: |
+          echo "::add-matcher::.github/actionlint-matcher.json"
+        shell: bash
+
+      - uses: docker://rhysd/actionlint:1.6.25
+        with:
+          args: -color

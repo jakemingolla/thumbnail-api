@@ -1,0 +1,15 @@
+name: 🚨 Lint
+on: pull_request
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Checkout Repo
+        uses: actions/checkout@v7
+
+      - name: 🏗 Setup
+        uses: ./.github/actions/setup
+
+      - name: 🚨 Lint
+        run: just lint

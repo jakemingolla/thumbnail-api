@@ -1,0 +1,17 @@
+name: 🧪 Tests
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Checkout Repo
+        uses: actions/checkout@v7
+
+      - name: 🏗 Setup
+        uses: ./.github/actions/setup
+
+      - name: 🧪 Run Tests
+        run: just test
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
