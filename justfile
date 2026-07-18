@@ -41,3 +41,12 @@ dev:
     uv run python -m thumbnail_api.main
 
 alias run := dev
+
+# Serve OpenAPI Swagger UI locally (no LocalStack required)
+# Open the printed URL in a browser. Ctrl+C to stop.
+swagger port="8090":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd docs/specification
+    echo "Swagger UI: http://127.0.0.1:{{port}}/swagger.html"
+    python3 -m http.server "{{port}}"
