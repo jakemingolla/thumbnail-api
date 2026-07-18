@@ -106,6 +106,7 @@ Local development uses LocalStack (or equivalent) as the S3 endpoint.
 
 - Virtual-hosted–style URLs (for example `http://{bucket}.localhost:4566/{key}`) must not be required for local clients; they often fail DNS/resolution for browsers talking to LocalStack.
 - Presigned URLs returned to clients in local/dev must be usable as-is against that path-style endpoint (scheme, host, and port matching the LocalStack listener the client can reach).
+- Presigned `PUT` URLs must use SigV4 query authentication (for example `X-Amz-Algorithm=AWS4-HMAC-SHA256`), not legacy SigV2 (`AWSAccessKeyId` / `Signature` query params).
 
 Production AWS addressing may use the platform default (virtual-hosted–style); this path-style requirement applies to LocalStack-backed environments.
 

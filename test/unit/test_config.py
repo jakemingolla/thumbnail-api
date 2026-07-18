@@ -128,3 +128,4 @@ def test_clients_use_endpoint_and_path_style_s3() -> None:
     assert dynamodb.meta.endpoint_url == config.aws_endpoint_url
     assert sqs.meta.endpoint_url == config.aws_endpoint_url
     assert s3.meta.config.s3["addressing_style"] == "path"
+    assert s3.meta.config.signature_version == "s3v4"
