@@ -16,6 +16,9 @@ Multiple agents on one machine **must not** share a LocalStack instance. Prefer 
 | `LOCALSTACK_EXTERNAL_HOST_START` / `_END` | Free host remap of container ports `4510-4559` |
 | `LOCALSTACK_VOLUME_DIR` | Per-instance data dir (`.localstack-<id>/`) |
 | `LOCALSTACK_ENDPOINT` | `http://127.0.0.1:<edge-port>` for SDKs / Terraform |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Dummy `test` / `test` for aws CLI / SDKs (matches Terraform defaults) |
+| `AWS_DEFAULT_REGION` / `AWS_REGION` | `us-east-1` |
+| `AWS_ENDPOINT_URL` | Same as `LOCALSTACK_ENDPOINT` |
 
 Do not run bare `docker compose up` for agent work — it defaults to shared name/ports and will collide.
 
