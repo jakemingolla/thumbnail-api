@@ -4,7 +4,10 @@ from botocore.config import Config as BotoConfig
 
 from .types import Config
 
-_PATH_STYLE_S3 = BotoConfig(s3={"addressing_style": "path"})
+_PATH_STYLE_S3 = BotoConfig(
+    signature_version="s3v4",
+    s3={"addressing_style": "path"},
+)
 
 
 def get_s3_client(config: Config) -> BaseClient:
