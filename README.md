@@ -48,10 +48,6 @@ Agent docs: lifecycle ([`docs/agents/dev-lifecycle.md`](docs/agents/dev-lifecycl
 
 Runtime settings live in a `.env` file at the project root (gitignored). Values are loaded by [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) via `get_config()` — see `src/thumbnail_api/config/types.py` for the schema and `src/thumbnail_api/config/main.py` for the factory.
 
-Create `.env` before running `just dev`:
+Create `.env` before running `just dev` — copy from [`.env.example`](.env.example). Required names (buckets, table, queue URL, LocalStack endpoint) are listed in [`docs/agents/local-deploy.md`](docs/agents/local-deploy.md).
 
-```dotenv
-environment=development
-```
-
-Environment variable names use uppercase with underscores; they map to the snake_case fields on `Config` (e.g. `environment` → `ENVIRONMENT`).
+Environment variable names use uppercase with underscores; they map to the snake_case fields on `Config` (e.g. `input_bucket` → `INPUT_BUCKET`).
