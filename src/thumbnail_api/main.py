@@ -3,7 +3,7 @@ from .config.types import Config
 
 
 def run(config: Config) -> None:
-    print(f"Hello from python-template! The environment is {config.environment}.")
+    print(f"Hello from thumbnail-api! The environment is {config.environment}.")
 
 
 def main() -> None:

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "python-template"
+name = "thumbnail-api"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/python_template"]
+packages = ["src/thumbnail_api"]
 
 [tool.basedpyright]
 include = ["src/", "test/"]

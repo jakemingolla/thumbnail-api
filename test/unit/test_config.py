@@ -1,7 +1,7 @@
 import pytest
 
-from python_template.config.types import Config
-from python_template.main import run
+from thumbnail_api.config.types import Config
+from thumbnail_api.main import run
 
 
 def test_run_uses_injected_config(capsys: pytest.CaptureFixture[str]) -> None:
@@ -12,4 +12,4 @@ def test_run_uses_injected_config(capsys: pytest.CaptureFixture[str]) -> None:
     run(config)
 
     captured = capsys.readouterr()
-    assert "Hello from python-template! The environment is test." in captured.out
+    assert "Hello from thumbnail-api! The environment is test." in captured.out
