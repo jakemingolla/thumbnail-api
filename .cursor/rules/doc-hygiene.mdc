@@ -1,0 +1,6 @@
+---
+description: Keep docs/ in lockstep with behavior, contracts, and verify steps
+alwaysApply: true
+---
+
+Follow `docs/agents/doc-hygiene.md`.
