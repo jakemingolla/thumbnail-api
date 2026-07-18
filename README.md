@@ -9,6 +9,7 @@ Application code lives in the installable package `thumbnail_api` under `src/thu
 - **Python 3.13.5** — match `.python-version` (pyenv or similar is recommended)
 - **[just](https://github.com/casey/just)** — command runner for common workflows (`brew install just`, or see [installation](https://github.com/casey/just#installation))
 - **uv** — not required upfront; `just install` installs the pinned version from `.uv-version` if uv is missing
+- **Docker** with Compose v2 — required to run LocalStack (local AWS)
 
 ## Quick start
 
@@ -22,6 +23,31 @@ just test
 ```
 
 `just install` runs `uv sync --frozen`, which installs the project in editable/dev mode along with its dependencies. Run `just` with no arguments to list all recipes. Tests do not require a `.env` file.
+
+## LocalStack (local AWS)
+
+v1 targets LocalStack, not real AWS. Edge endpoint: `http://localhost:4566`.
+
+From repo root:
+
+```bash
+docker compose up -d
+```
+
+Wait until healthy:
+
+```bash
+docker compose ps
+curl -sf http://localhost:4566/_localstack/health
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Agent-oriented detail (services, files): [`docs/agents/local-deploy.md`](docs/agents/local-deploy.md).
 
 ## Configuration (`.env`)
 
