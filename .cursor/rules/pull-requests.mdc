@@ -1,0 +1,6 @@
+---
+description: PR creation defaults and LocalStack cleanup gate
+alwaysApply: true
+---
+
+Follow `docs/agents/pull-requests.md`.

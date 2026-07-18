@@ -10,6 +10,7 @@ Application code lives in the installable package `thumbnail_api` under `src/thu
 - **[just](https://github.com/casey/just)** — command runner for common workflows (`brew install just`, or see [installation](https://github.com/casey/just#installation))
 - **uv** — not required upfront; `just install` installs the pinned version from `.uv-version` if uv is missing
 - **Docker** with Compose v2 — required to run LocalStack (local AWS)
+- **terraform** — required to run terraform (local AWS)
 
 ## Quick start
 
@@ -26,28 +27,22 @@ just test
 
 ## LocalStack (local AWS)
 
-v1 targets LocalStack, not real AWS. Edge endpoint: `http://localhost:4566`.
-
-From repo root:
+v1 targets LocalStack, not real AWS. Use the just recipes so each checkout gets unique ports/names (safe for parallel agents/worktrees):
 
 ```bash
-docker compose up -d
+just localstack-up          # allocate + start; prints LOCALSTACK_ENDPOINT
+just localstack-down        # full teardown (containers, volumes, local tfstate)
+just localstack-assert-clean  # fail if this worktree still has leftovers
 ```
 
-Wait until healthy:
+After `localstack-up`, load the generated env (gitignored):
 
 ```bash
-docker compose ps
-curl -sf http://localhost:4566/_localstack/health
+set -a && source .localstack.env && set +a
+curl -sf "$LOCALSTACK_ENDPOINT/_localstack/health"
 ```
 
-Stop:
-
-```bash
-docker compose down
-```
-
-Agent-oriented detail (services, files): [`docs/agents/local-deploy.md`](docs/agents/local-deploy.md).
+Agent docs: lifecycle ([`docs/agents/dev-lifecycle.md`](docs/agents/dev-lifecycle.md)), deploy ([`docs/agents/local-deploy.md`](docs/agents/local-deploy.md)).
 
 ## Configuration (`.env`)
 
