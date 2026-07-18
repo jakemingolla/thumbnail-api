@@ -80,6 +80,20 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb describe-table --table-name "
 
 (`awslocal dynamodb describe-table --table-name "$TABLE"` is equivalent if installed.)
 
+### SQS queues (after apply)
+
+Terraform creates `{name_prefix}-work` and `{name_prefix}-work-dlq` (defaults `thumbnail-work`, `thumbnail-work-dlq`). Useful outputs: `work_queue_url`, `work_queue_arn`, `work_dlq_url`, `work_dlq_arn`, `sqs_max_receive_count`.
+
+Verify against the running instance:
+
+```bash
+set -a && source .localstack.env && set +a
+aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
+# or: terraform -chdir=infra output
+```
+
+(`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
+
 ## Files
 
 | Path | Role |
@@ -89,4 +103,5 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb describe-table --table-name "
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
 | `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
+| `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |

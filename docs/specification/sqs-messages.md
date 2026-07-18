@@ -16,7 +16,7 @@ Related contracts (owned elsewhere):
 | Fan-out | Dispatcher must send exactly one message per configured size for the job. |
 | Worker batch size | Event source mapping **batch size must be 1** initially (one SQS record per Lambda invocation). Larger batches are out of scope until a later ticket revises this document. |
 
-Visibility timeout and concrete `maxReceiveCount` integers are Terraform concerns (THUMB-008). **Failure / redrive semantics** (when a size or job becomes `failed`, transient vs permanent, last-receive behavior) are normative only in `job-state-machine.md` — do not duplicate them here.
+Visibility timeout is a Terraform operational knob (`infra/sqs.tf`). Concrete **`maxReceiveCount` is 5** (v1); failure / redrive semantics (when a size or job becomes `failed`, transient vs permanent, last-receive behavior) are normative only in `job-state-machine.md` — do not duplicate the full rules here.
 
 ## Message body
 
@@ -97,7 +97,7 @@ Dispatcher must only enqueue messages that satisfy this schema for the configure
 
 ## Out of scope
 
-- Concrete `maxReceiveCount`, visibility timeout, and queue names in Terraform (THUMB-008); record the chosen integer against `job-state-machine.md` when set
+- Changing `maxReceiveCount` / queue names without updating `job-state-machine.md` and Terraform together
 - SQS message attributes, FIFO queues, or content-based deduplication
 - Batch sizes greater than 1
 - Partial fan-out or priority queues
