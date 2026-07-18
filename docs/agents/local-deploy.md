@@ -26,6 +26,8 @@ set -a && source .localstack.env && set +a
 curl -sf "$LOCALSTACK_ENDPOINT/_localstack/health"
 ```
 
+Sourcing `.localstack.env` also sets dummy `AWS_*` credentials (`test` / `test`), region, and `AWS_ENDPOINT_URL` so `aws` / SDKs work against LocalStack without `aws login`.
+
 ## Required services
 
 Compose sets `SERVICES` to:

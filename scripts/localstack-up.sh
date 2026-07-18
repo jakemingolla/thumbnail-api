@@ -8,9 +8,39 @@ source "${SCRIPT_DIR}/lib/localstack.sh"
 
 cd "${REPO_ROOT}"
 
+# Dummy credentials for LocalStack (aws CLI / SDKs). Matches infra/variables.tf defaults.
+write_aws_env_lines() {
+  cat <<EOF
+# Dummy credentials for LocalStack (aws CLI / SDKs); not real AWS.
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_DEFAULT_REGION=us-east-1
+AWS_REGION=us-east-1
+AWS_ENDPOINT_URL=${LOCALSTACK_ENDPOINT}
+EOF
+}
+
+ensure_aws_env() {
+  # Drop prior AWS_* block (if any), then append the canonical one.
+  if [[ -f "${LOCALSTACK_ENV_FILE}" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    grep -Ev '^(# Dummy credentials for LocalStack|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|AWS_DEFAULT_REGION=|AWS_REGION=|AWS_ENDPOINT_URL=)' \
+      "${LOCALSTACK_ENV_FILE}" >"${tmp}" || true
+    mv "${tmp}" "${LOCALSTACK_ENV_FILE}"
+  fi
+  write_aws_env_lines >>"${LOCALSTACK_ENV_FILE}"
+}
+
 if [[ -f "${LOCALSTACK_ENV_FILE}" ]]; then
   load_localstack_env
-  if docker ps --format '{{.Names}}' | grep -qx "${LOCALSTACK_DOCKER_NAME:-}"; then
+  if ! docker_names="$(docker ps --format '{{.Names}}' 2>/dev/null)"; then
+    echo "error: cannot talk to Docker (is the daemon running?)" >&2
+    exit 1
+  fi
+  if grep -qx "${LOCALSTACK_DOCKER_NAME:-}" <<<"${docker_names}"; then
+    ensure_aws_env
+    load_localstack_env
     echo "LocalStack already running for this worktree."
     echo "  project:  ${COMPOSE_PROJECT_NAME}"
     echo "  name:     ${LOCALSTACK_DOCKER_NAME}"
@@ -50,6 +80,7 @@ LOCALSTACK_EXTERNAL_HOST_START=${LOCALSTACK_EXTERNAL_HOST_START}
 LOCALSTACK_EXTERNAL_HOST_END=${LOCALSTACK_EXTERNAL_HOST_END}
 LOCALSTACK_ENDPOINT=${LOCALSTACK_ENDPOINT}
 EOF
+write_aws_env_lines >>"${LOCALSTACK_ENV_FILE}"
 
 mkdir -p "${LOCALSTACK_VOLUME_DIR}"
 
