@@ -49,6 +49,7 @@ select = [
 ]
 
 ignore = [
+    "COM812", # trailing-comma-missing (conflicts with ruff format)
     "D100", # Missing docstring in public module
     "D101", #Missing docstring in public class
     "D103", # Missing docstring in public function
