@@ -49,19 +49,32 @@ set -a && source ../.localstack.env && set +a
 terraform apply -auto-approve -var="localstack_endpoint=${LOCALSTACK_ENDPOINT}"
 ```
 
-Empty/near-empty root module is expected until resource tickets add S3/SQS/DynamoDB/Lambda.
-
 State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that state with the LocalStack instance — see [`dev-lifecycle.md`](dev-lifecycle.md).
 
 ### Constraint: path-style S3
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
+### SQS queues (after apply)
+
+Terraform creates `{name_prefix}-work` and `{name_prefix}-work-dlq` (defaults `thumbnail-work`, `thumbnail-work-dlq`). Useful outputs: `work_queue_url`, `work_queue_arn`, `work_dlq_url`, `work_dlq_arn`, `sqs_max_receive_count`.
+
+Verify against the running instance:
+
+```bash
+set -a && source .localstack.env && set +a
+aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
+# or: terraform -chdir=infra output
+```
+
+(`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
+
 ## Files
 
 | Path | Role |
 |------|------|
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
-| `infra/` | Terraform root (LocalStack AWS provider + placeholders) |
+| `infra/` | Terraform root (LocalStack AWS provider + resources) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
+| `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
