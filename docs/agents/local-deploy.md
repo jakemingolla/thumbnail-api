@@ -49,19 +49,31 @@ set -a && source ../.localstack.env && set +a
 terraform apply -auto-approve -var="localstack_endpoint=${LOCALSTACK_ENDPOINT}"
 ```
 
-Empty/near-empty root module is expected until resource tickets add S3/SQS/DynamoDB/Lambda.
-
 State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that state with the LocalStack instance — see [`dev-lifecycle.md`](dev-lifecycle.md).
 
 ### Constraint: path-style S3
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
+### Verify DynamoDB jobs table
+
+Default name (from `name_prefix`, default `thumbnail`): `thumbnail-jobs`. Override: `jobs_table_name`. Terraform output: `jobs_table_name` (for later `JOBS_TABLE` Lambda env).
+
+```bash
+set -a && source .localstack.env && set +a
+TABLE=$(cd infra && terraform output -raw jobs_table_name)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb describe-table --table-name "$TABLE"
+# expect: TableName thumbnail-jobs, KeySchema HASH AttributeName job_id, BillingMode PAY_PER_REQUEST
+```
+
+(`awslocal dynamodb describe-table --table-name "$TABLE"` is equivalent if installed.)
+
 ## Files
 
 | Path | Role |
 |------|------|
 | `docker-compose.yml` | LocalStack service (env-driven name/ports/volume) |
-| `infra/` | Terraform root (LocalStack AWS provider + placeholders) |
+| `infra/` | Terraform root (LocalStack AWS provider + resources) |
 | `infra/providers.tf` | LocalStack endpoints + `s3_use_path_style` |
+| `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
