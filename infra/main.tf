@@ -1,3 +1,3 @@
-# Resource definitions live in follow-on tickets (S3, SQS, DynamoDB, Lambda, API Gateway).
-# This root module is intentionally near-empty so `terraform apply` validates the
-# LocalStack provider wiring before resources exist.
+# Root module for LocalStack. Resource files:
+#   dynamodb.tf — jobs table (partition key job_id)
+# Follow-on: S3, SQS, Lambda, API Gateway.
