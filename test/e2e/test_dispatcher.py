@@ -81,7 +81,7 @@ def _wait_for_fan_out(
             pending_sizes = [
                 str(size)
                 for size in sizes
-                if job["sizes"].get(str(size), {}).get("status") == "pending"
+                if (entry := job["sizes"].get(str(size))) is None or entry["status"] == "pending"
             ]
             if not pending_sizes:
                 return job
@@ -89,9 +89,7 @@ def _wait_for_fan_out(
 
     size_summary = None
     if last is not None:
-        size_summary = {
-            key: entry["status"] for key, entry in last["sizes"].items()
-        }
+        size_summary = {key: entry["status"] for key, entry in last["sizes"].items()}
     pytest.fail(
         f"dispatcher fan-out not observed for job {job_id} within {timeout_seconds}s "
         f"(last_status={None if last is None else last['status']}, sizes={size_summary}). "
