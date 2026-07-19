@@ -2,7 +2,7 @@
 
 Jobs HTTP create → get: ``test_jobs_api.py``. Dispatcher upload fan-out:
 ``test_dispatcher.py``. Worker one-size path: ``test_worker.py``. Full
-create → upload → poll → thumbnails rollup: THUMB-025.
+create → upload → poll → ``complete``: ``test_happy_path.py``.
 """
 
 from __future__ import annotations

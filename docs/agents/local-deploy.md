@@ -53,6 +53,7 @@ Reusable Compose → package → Terraform apply → pytest gate. Feature ticket
 |------|--------|
 | Recipe | `just test-e2e` |
 | Tests | `test/e2e/` (`pytest` marker `e2e`) |
+| Full product path | `test/e2e/test_happy_path.py` — create → PUT → poll until `complete` + output objects |
 | CI job | `e2e` in `.github/workflows/e2e.yaml` (workflow name: `🧪 E2E (LocalStack)`) |
 | Fast suite | `just test` — unit + non-LocalStack integration only (no Docker) |
 
@@ -76,7 +77,7 @@ Do not run bare `pytest test/e2e/` without the harness — env and apply will be
 
 ### CI (GitHub Actions)
 
-On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same as local: LocalStack healthy + apply + outputs readable, plus feature scenarios under `test/e2e/` (e.g. jobs HTTP create → get).
+On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same as local: LocalStack healthy + apply + outputs readable, plus feature scenarios under `test/e2e/` (jobs HTTP, dispatcher, worker, and the full create → upload → poll → `complete` path).
 
 ## Endpoint
 
@@ -238,7 +239,7 @@ JOB_ID=$(echo "$RESP" | jq -r .job_id)
 curl -sS "$API_BASE/jobs/$JOB_ID" | jq .
 ```
 
-E2E covers the same slice (`test/e2e/test_jobs_api.py` via `just test-e2e`). Upload → pipeline assertions are later tickets.
+E2E covers the same slice (`test/e2e/test_jobs_api.py`) and the full create → presigned PUT → poll → `complete` path (`test/e2e/test_happy_path.py`) via `just test-e2e`.
 
 For debugging without HTTP, invoke the functions directly with API Gateway proxy-shaped events:
 
@@ -266,7 +267,7 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
 cat /tmp/get-job-out.json
 ```
 
-Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — covered when the full upload path lands in e2e/runbook tickets.
+Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls. From the host (including e2e), rewrite only the URL **host/port** to `LOCALSTACK_ENDPOINT` before `PUT` — keep path-style (`/<bucket>/<key>?...`); do not switch to virtual-hosted style. The happy-path e2e scenario does this rewrite (`test/e2e/test_happy_path.py`).
 
 ### Pipeline Lambda IAM roles
 
