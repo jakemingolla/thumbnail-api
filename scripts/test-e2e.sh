@@ -50,32 +50,8 @@ echo "e2e: credentials AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-unset} region=${AW
 echo "e2e: packaging Lambda artifacts ..."
 just package
 
-# Terraform defaults lambda_architectures to arm64 (Apple Silicon). CI/ubuntu and
-# other x86_64 hosts must deploy x86_64 so LocalStack can invoke the zip natively
-# (arm64 functions hang under qemu / fail to start on amd64 runners).
-lambda_arch_for_host() {
-  case "$(uname -m)" in
-    arm64 | aarch64) echo "arm64" ;;
-    *) echo "x86_64" ;;
-  esac
-}
-LAMBDA_ARCH="$(lambda_arch_for_host)"
-echo "e2e: terraform lambda_architectures=[\"${LAMBDA_ARCH}\"] (host=$(uname -m))"
-
 echo "e2e: terraform init + apply (endpoint=${LOCALSTACK_ENDPOINT}) ..."
-(
-  cd "${REPO_ROOT}/infra"
-  terraform init -input=false
-  if ! terraform apply -auto-approve -input=false \
-    -var="localstack_endpoint=${LOCALSTACK_ENDPOINT}" \
-    -var="lambda_architectures=[\"${LAMBDA_ARCH}\"]"; then
-    echo "error: terraform apply failed" >&2
-    echo "  LocalStack endpoint: ${LOCALSTACK_ENDPOINT}" >&2
-    echo "  lambda_architectures: [\"${LAMBDA_ARCH}\"]" >&2
-    echo "  Hint: curl -sf \"${LOCALSTACK_ENDPOINT}/_localstack/health\" | jq ." >&2
-    exit 1
-  fi
-)
+"${SCRIPT_DIR}/terraform-apply.sh"
 
 echo "e2e: running pytest test/e2e/ ..."
 uv run python -m pytest test/e2e/ -m e2e "$@"

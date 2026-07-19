@@ -4,10 +4,45 @@ Local AWS edge for v1. Terraform and boto3 must use this endpoint — not real A
 
 Start/stop, isolation, and cleanup: [`dev-lifecycle.md`](dev-lifecycle.md).
 
+## Happy path (canonical)
+
+Ordered deploy loop — do not invent flags. From a clean checkout (after `just install`):
+
+```bash
+just localstack-up   # Compose: allocate ports/names, start, wait healthy
+just package         # Lambda zips → dist/lambda/{api,pipeline}.zip
+just apply           # terraform init + apply against LOCALSTACK_ENDPOINT
+just outputs         # print API_BASE + key outputs
+```
+
+One-shot equivalent:
+
+```bash
+just deploy          # localstack-up → package → apply → outputs
+```
+
+| Recipe | Requires | Fails clearly if missing |
+|--------|----------|--------------------------|
+| `just localstack-up` | Docker Compose v2 + daemon | `docker` / Compose / daemon |
+| `just package` | `uv`, `zip` | `uv` (hint: `just install`), `zip` |
+| `just apply` | healthy LocalStack, zips, Terraform `>= 1.5` | `.localstack.env`, unhealthy edge, missing zips, `terraform` |
+| `just outputs` | prior apply (local `infra/terraform.tfstate`) | `terraform`, missing state |
+| `just deploy` | same as the four steps above | same as each step |
+
+Env notes:
+
+- After `localstack-up`, load instance env: `set -a && source .localstack.env && set +a`
+- Dummy `AWS_*` credentials (`test` / `test`) and `AWS_ENDPOINT_URL` are in `.localstack.env` — no `aws login`
+- `just apply` passes `localstack_endpoint` and host-matched `lambda_architectures` — do not hand-roll those vars
+- Plain `terraform` is the supported apply path (`tflocal` optional / not required)
+- `just outputs` prints `API_BASE=...` and an `export API_BASE=...` line for the shell
+
+Teardown (this worktree only): `just localstack-down` then `just localstack-assert-clean` before PRs — see [`dev-lifecycle.md`](dev-lifecycle.md) / [`pull-requests.md`](pull-requests.md).
+
 ## Prerequisites
 
 - Docker with Compose v2 (`docker compose version`)
-- Terraform `>= 1.5` (`terraform version`)
+- Terraform `>= 1.5` (`terraform version`) — `tflocal` is **not** required
 - A running LocalStack instance for this worktree (`just localstack-up` — see [`dev-lifecycle.md`](dev-lifecycle.md)) — **not** required before `just test-e2e` (the harness starts LocalStack itself)
 
 ## E2E harness (LocalStack)
@@ -31,7 +66,7 @@ What it does:
 
 1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
 2. Runs `just package` (Lambda zips as available; host-native Linux wheels).
-3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`, passing `lambda_architectures` for the host (`arm64` on Apple Silicon, `x86_64` on CI/ubuntu) so it matches the zip.
+3. Runs `just apply` (`scripts/terraform-apply.sh`) — same init/apply flags as the happy path.
 4. `uv run python -m pytest test/e2e/ -m e2e`.
 5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
 
@@ -73,18 +108,14 @@ Docker socket is mounted so Lambda can run containers.
 
 Working directory: `infra/`.
 
-Provider is wired to LocalStack endpoints in `infra/providers.tf` (not real AWS). Apply with plain `terraform` from that directory — `tflocal` is optional and not required.
+Provider is wired to LocalStack endpoints in `infra/providers.tf` (not real AWS). **Canonical apply:** `just apply` (after `just localstack-up` and `just package`). Plain `terraform` under the hood — `tflocal` is optional and not required.
 
-Pass the allocated endpoint (after `just localstack-up`):
+`just apply` runs `terraform init` + `apply -auto-approve` with:
 
-```bash
-cd infra
-terraform init
-set -a && source ../.localstack.env && set +a
-terraform apply -auto-approve -var="localstack_endpoint=${LOCALSTACK_ENDPOINT}"
-```
+- `-var="localstack_endpoint=${LOCALSTACK_ENDPOINT}"` from `.localstack.env`
+- `-var="lambda_architectures=[\"arm64\"]"` on Apple Silicon, `["x86_64"]` otherwise (must match `just package` wheels)
 
-State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that state with the LocalStack instance — see [`dev-lifecycle.md`](dev-lifecycle.md).
+Do not hand-roll those flags for the happy path. State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that state with the LocalStack instance — see [`dev-lifecycle.md`](dev-lifecycle.md).
 
 ### Constraint: path-style S3
 
@@ -172,10 +203,11 @@ Stage default: `dev` (`var.api_stage_name`). Image bytes never go through the ga
 
 #### Obtain `API_BASE`
 
-After apply, prefer the Terraform output (uses this worktree’s `LOCALSTACK_ENDPOINT` edge port):
+After apply, prefer the helper (prints `API_BASE` and key outputs):
 
 ```bash
-set -a && source .localstack.env && set +a
+just outputs
+# then: eval the printed `export API_BASE=...` line, or:
 export API_BASE="$(cd infra && terraform output -raw api_base_url)"
 # e.g. http://127.0.0.1:<edge-port>/_aws/execute-api/<apiId>/dev
 ```
@@ -183,12 +215,13 @@ export API_BASE="$(cd infra && terraform output -raw api_base_url)"
 Equivalent pattern from `apiId` + stage (matches [`docs/specification/api.md`](../specification/api.md)):
 
 ```bash
+set -a && source .localstack.env && set +a
 API_ID=$(cd infra && terraform output -raw api_id)
 STAGE=$(cd infra && terraform output -raw api_stage_name)
 export API_BASE="${LOCALSTACK_ENDPOINT}/_aws/execute-api/${API_ID}/${STAGE}"
 ```
 
-Outputs: `api_id`, `api_stage_name`, `api_base_url`.
+Outputs: `api_id`, `api_stage_name`, `api_base_url` (also listed by `just outputs`).
 
 #### HTTP smoke (create → get)
 
@@ -408,7 +441,11 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
+| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
+| `scripts/terraform-apply.sh` | `just apply` — terraform init/apply vs LocalStack |
+| `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
+| `scripts/lib/prereqs.sh` | Shared Docker / terraform prerequisite checks |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |
 | `.github/workflows/e2e.yaml` | PR job `e2e` — Docker + LocalStack + `just test-e2e` |

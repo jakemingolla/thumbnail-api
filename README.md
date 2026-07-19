@@ -30,8 +30,11 @@ just test
 v1 targets LocalStack, not real AWS. Use the just recipes so each checkout gets unique ports/names (safe for parallel agents/worktrees):
 
 ```bash
-just localstack-up          # allocate + start; prints LOCALSTACK_ENDPOINT
-just localstack-down        # full teardown (containers, volumes, local tfstate)
+just localstack-up            # allocate + start; prints LOCALSTACK_ENDPOINT
+just package && just apply    # Lambda zips + terraform against LocalStack
+just outputs                  # print API_BASE + key outputs
+# or: just deploy             # up → package → apply → outputs
+just localstack-down          # full teardown (containers, volumes, local tfstate)
 just localstack-assert-clean  # fail if this worktree still has leftovers
 ```
 

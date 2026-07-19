@@ -72,3 +72,20 @@ swagger port="8090":
 # Idempotent; targets Linux wheels for LocalStack. See docs/agents/local-deploy.md.
 package: uv
     ./scripts/package-lambda.sh
+
+# terraform init + apply against this worktree's LocalStack (needs localstack-up + package)
+apply:
+    ./scripts/terraform-apply.sh
+
+# Print API_BASE and key Terraform outputs (needs prior just apply)
+outputs:
+    ./scripts/show-outputs.sh
+
+# Happy path: localstack-up → package → apply → outputs (see docs/agents/local-deploy.md)
+deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just localstack-up
+    just package
+    just apply
+    just outputs
