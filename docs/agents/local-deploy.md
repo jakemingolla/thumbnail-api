@@ -28,6 +28,7 @@ just deploy          # localstack-up → package → apply → outputs
 | `just apply` | healthy LocalStack, zips, Terraform `>= 1.5` | `.localstack.env`, unhealthy edge, missing zips, `terraform` |
 | `just outputs` | prior apply (local `infra/terraform.tfstate`) | `terraform`, missing state |
 | `just deploy` | same as the four steps above | same as each step |
+| `just upload-watch <image>` | prior apply; `$API_BASE` or tfstate | missing image / `API_BASE` / state; non-zero on fail/timeout |
 
 Env notes:
 
@@ -241,6 +242,20 @@ curl -sS "$API_BASE/jobs/$JOB_ID" | jq .
 
 E2E covers the same slice (`test/e2e/test_jobs_api.py`) and the full create → presigned PUT → poll → `complete` path (`test/e2e/test_happy_path.py`) via `just test-e2e`.
 
+#### Verify (upload + watch)
+
+Interactive customer path after `just deploy` (or `apply` + `outputs`). Creates a job, PUTs the image to the rewritten presigned URL, and polls until the job and every size are terminal (`complete` or `failed`). Progress prints per-size status; exits non-zero on failure or timeout (timeout dumps the last job JSON).
+
+```bash
+# Optional: load edge env + API_BASE from a prior `just outputs`
+set -a && source .localstack.env && set +a
+export API_BASE="$(cd infra && terraform output -raw api_base_url)"
+
+just upload-watch ./path/to/photo.jpg
+# Uses $API_BASE / $LOCALSTACK_ENDPOINT when set; otherwise terraform outputs.
+# Optional flags: just upload-watch ./path/to/photo.jpg --timeout 180 --interval 1
+```
+
 For debugging without HTTP, invoke the functions directly with API Gateway proxy-shaped events:
 
 ```bash
@@ -442,10 +457,11 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
-| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` |
+| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` / `upload-watch` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/terraform-apply.sh` | `just apply` — terraform init/apply vs LocalStack |
 | `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
+| `scripts/upload_watch.py` | `just upload-watch` — create → PUT → poll until terminal |
 | `scripts/lib/prereqs.sh` | Shared Docker / terraform prerequisite checks |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |

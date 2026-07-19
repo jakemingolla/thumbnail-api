@@ -89,3 +89,16 @@ deploy:
     just package
     just apply
     just outputs
+
+# Create job → PUT image → poll until all sizes terminal (needs prior apply)
+# Extra flags pass through, e.g. `just upload-watch ./photo.jpg --timeout 180`
+upload-watch image *args: uv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .localstack.env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .localstack.env
+      set +a
+    fi
+    uv run python scripts/upload_watch.py "{{image}}" {{args}}
