@@ -1,7 +1,8 @@
 """Minimal e2e smoke: LocalStack healthy + Terraform skeleton outputs readable.
 
 Jobs HTTP create → get: ``test_jobs_api.py``. Dispatcher upload fan-out:
-``test_dispatcher.py``. Full create → upload → poll → thumbnails: THUMB-022/025.
+``test_dispatcher.py``. Worker one-size path: ``test_worker.py``. Full
+create → upload → poll → thumbnails rollup: THUMB-025.
 """
 
 from __future__ import annotations
@@ -27,6 +28,9 @@ _REQUIRED_OUTPUTS = (
     "api_base_url",
     "dispatcher_function_name",
     "thumbnail_sizes",
+    "worker_function_name",
+    "worker_event_source_mapping_uuid",
+    "sqs_max_receive_count",
 )
 
 

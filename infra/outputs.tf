@@ -157,3 +157,18 @@ output "worker_role_name" {
   description = "IAM role name for the worker Lambda."
   value       = aws_iam_role.worker.name
 }
+
+output "worker_function_name" {
+  description = "Lambda function name for the SQS worker."
+  value       = aws_lambda_function.worker.function_name
+}
+
+output "worker_function_arn" {
+  description = "ARN of the worker Lambda."
+  value       = aws_lambda_function.worker.arn
+}
+
+output "worker_event_source_mapping_uuid" {
+  description = "UUID of the worker SQS event source mapping (batch size 1)."
+  value       = aws_lambda_event_source_mapping.worker_sqs.uuid
+}

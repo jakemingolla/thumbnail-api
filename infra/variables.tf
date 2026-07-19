@@ -65,7 +65,7 @@ variable "sqs_max_receive_count" {
 }
 
 variable "sqs_visibility_timeout_seconds" {
-  description = "Work-queue visibility timeout. Raise with worker Lambda timeout (THUMB-022)."
+  description = "Work-queue visibility timeout. Must be >= worker_lambda_timeout_seconds."
   type        = number
   default     = 60
 }
@@ -97,7 +97,7 @@ variable "lambda_runtime" {
 variable "lambda_architectures" {
   description = <<-EOT
     Lambda instruction set. Must match wheels from just package
-    (Apple Silicon → arm64 / aarch64-unknown-linux-gnu; otherwise x86_64).
+    (Apple Silicon → arm64 / aarch64-manylinux_2_28; otherwise x86_64).
   EOT
   type        = list(string)
   default     = ["arm64"]
@@ -142,6 +142,18 @@ variable "dispatcher_lambda_memory_size" {
   description = "Memory (MB) for the S3 → SQS dispatcher Lambda."
   type        = number
   default     = 256
+}
+
+variable "worker_lambda_timeout_seconds" {
+  description = "Timeout for the worker Lambda. Keep below sqs_visibility_timeout_seconds."
+  type        = number
+  default     = 30
+}
+
+variable "worker_lambda_memory_size" {
+  description = "Memory (MB) for the worker Lambda (Pillow resize)."
+  type        = number
+  default     = 512
 }
 
 variable "thumbnail_sizes" {

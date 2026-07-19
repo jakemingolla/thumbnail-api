@@ -247,7 +247,7 @@ Terraform (`infra/lambda_pipeline.tf`) registers the dispatcher after `just pack
 |----------------------------------|---------|------|---------|
 | `thumbnail-dispatcher` | `thumbnail_api.handlers.dispatcher.handler` | `dispatcher` | `dispatcher_function_name`, `dispatcher_function_arn` |
 
-Same runtime/arch defaults as API Lambdas. Env matches the shared `Config` keys (including `QUEUE_URL` and `THUMBNAIL_SIZES`). Worker function wiring is THUMB-022.
+Same runtime/arch defaults as API Lambdas. Env matches the shared `Config` keys (including `QUEUE_URL` and `THUMBNAIL_SIZES`).
 
 Smoke without the HTTP API (seed via `create_job`, then PUT the original):
 
@@ -283,6 +283,57 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb get-item \
 
 If the queue is empty, wait a few seconds and receive again (LocalStack notification latency). Purge the work queue between smokes if leftover messages confuse counts: `aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs purge-queue --queue-url "$QUEUE"`.
 
+### Worker Lambda + SQS trigger
+
+Terraform (`infra/lambda_pipeline.tf`) also registers the worker (Pillow included in `pipeline.zip`). An SQS event source mapping polls the work queue with **batch size 1**.
+
+| Item (default `name_prefix`) | Value |
+|------------------------------|-------|
+| Function | `thumbnail-worker` |
+| Handler | `thumbnail_api.handlers.worker.handler` |
+| Role | `thumbnail-worker` |
+| Artifact | `dist/lambda/pipeline.zip` |
+| Timeout / memory | 30s / 512 MB (vars `worker_lambda_*`) |
+| Event source | work queue ARN, `batch_size = 1` |
+| Outputs | `worker_function_name`, `worker_function_arn`, `worker_event_source_mapping_uuid` |
+
+Env matches `local.pipeline_lambda_environment` (same `Config` keys / in-Lambda `AWS_ENDPOINT_URL`).
+
+For a single-size debug invoke (synthetic SQS event):
+
+```bash
+set -a && source .localstack.env && set +a
+WORKER_FN=$(cd infra && terraform output -raw worker_function_name)
+# After seeding jobs table + input object for JOB_ID / SIZE:
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
+  --function-name "$WORKER_FN" \
+  --cli-binary-format raw-in-base64-out \
+  --payload "{\"Records\":[{\"messageId\":\"dbg\",\"body\":\"{\\\"job_id\\\":\\\"${JOB_ID}\\\",\\\"input_key\\\":\\\"uploads/${JOB_ID}/original\\\",\\\"size\\\":256}\",\"attributes\":{\"ApproximateReceiveCount\":\"1\"}}]}" \
+  /tmp/worker-out.json
+cat /tmp/worker-out.json
+```
+
+### Inspect the work DLQ
+
+After `maxReceiveCount` (default **5**) failed receives, SQS redrives the message to `{name_prefix}-work-dlq`. Confirm redrive and peek poison payloads:
+
+```bash
+set -a && source .localstack.env && set +a
+QUEUE_URL=$(cd infra && terraform output -raw work_queue_url)
+DLQ_URL=$(cd infra && terraform output -raw work_dlq_url)
+
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs get-queue-attributes \
+  --queue-url "$QUEUE_URL" --attribute-names RedrivePolicy
+
+# Approximate number of messages on the DLQ
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs get-queue-attributes \
+  --queue-url "$DLQ_URL" --attribute-names ApproximateNumberOfMessages
+
+# Receive (does not delete) up to one poison message for inspection
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs receive-message \
+  --queue-url "$DLQ_URL" --max-number-of-messages 1 --visibility-timeout 0
+```
+
 ## Lambda packaging
 
 Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
@@ -298,7 +349,7 @@ Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manua
 | API handlers (`create_job`, `get_job`) | `dist/lambda/api.zip` | `filename = "${path.module}/../dist/lambda/api.zip"` |
 | Pipeline handlers (`dispatcher`, `worker`) | `dist/lambda/pipeline.zip` | `filename = "${path.module}/../dist/lambda/pipeline.zip"` |
 
-Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler` / `thumbnail_api.handlers.dispatcher.handler`). Extend or split `pipeline.zip` when the worker lands (THUMB-022) if its deps diverge.
+Both zips currently share the same payload (`thumbnail_api` + runtime third-party deps including **Pillow** for the worker). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `get_job` / `dispatcher` / `worker`). Split artifacts later if API vs pipeline deps diverge.
 
 ### Native deps (Pillow)
 
@@ -355,7 +406,7 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
-| `infra/lambda_pipeline.tf` | dispatcher Lambda + input-bucket S3 notification |
+| `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |

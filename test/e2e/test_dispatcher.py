@@ -1,8 +1,13 @@
-"""E2E: S3 ObjectCreated under uploads/ → dispatcher → N SQS messages + processing."""
+"""E2E: S3 ObjectCreated under uploads/ → dispatcher → fan-out + processing.
+
+With the worker SQS event source mapping enabled, messages may be consumed
+before this test can receive them. Fan-out is asserted via DynamoDB: every
+configured size leaves ``pending`` (worker claimed the message), and overall
+status leaves ``pending`` (dispatcher ``mark_job_processing``).
+"""
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Protocol, cast
@@ -17,6 +22,7 @@ from thumbnail_api.s3 import build_input_key
 
 if TYPE_CHECKING:
     from thumbnail_api.jobs.store import DynamoDBClient
+    from thumbnail_api.jobs.types import JobRecord
 
 _PATH_STYLE_S3 = BotoConfig(
     signature_version="s3v4",
@@ -32,14 +38,6 @@ _PURGE_IN_PROGRESS = "AWS.SimpleQueueService.PurgeQueueInProgress"
 
 class SQSClient(Protocol):
     """Subset of boto3 SQS used by the dispatcher e2e scenario."""
-
-    def receive_message(self, **kwargs: object) -> dict[str, Any]:
-        """ReceiveMessage."""
-        ...
-
-    def delete_message(self, **kwargs: object) -> dict[str, Any]:
-        """DeleteMessage."""
-        ...
 
     def purge_queue(self, **kwargs: object) -> dict[str, Any]:
         """PurgeQueue."""
@@ -65,52 +63,38 @@ def _require_sizes(tf_outputs: dict[str, object]) -> list[int]:
     return sizes
 
 
-def _collect_messages(
-    sqs: SQSClient,
-    *,
-    queue_url: str,
-    expected: int,
-    timeout_seconds: float = _POLL_TIMEOUT_SECONDS,
-) -> list[dict[str, Any]]:
-    deadline = time.monotonic() + timeout_seconds
-    collected: list[dict[str, Any]] = []
-    while len(collected) < expected and time.monotonic() < deadline:
-        response = sqs.receive_message(
-            QueueUrl=queue_url,
-            MaxNumberOfMessages=min(10, expected - len(collected)),
-            WaitTimeSeconds=1,
-            VisibilityTimeout=30,
-        )
-        messages = cast("list[dict[str, Any]]", response.get("Messages") or [])
-        for message in messages:
-            collected.append(message)
-            receipt = message.get("ReceiptHandle")
-            if isinstance(receipt, str):
-                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt)
-        if len(collected) < expected:
-            time.sleep(_POLL_INTERVAL_SECONDS)
-    return collected
-
-
-def _wait_for_processing(
+def _wait_for_fan_out(
     dynamodb: DynamoDBClient,
     *,
     table_name: str,
     job_id: str,
+    sizes: list[int],
     timeout_seconds: float = _POLL_TIMEOUT_SECONDS,
-) -> str:
+) -> JobRecord:
+    """Wait until dispatcher advanced the job and every size left ``pending``."""
     deadline = time.monotonic() + timeout_seconds
-    last_status = "missing"
+    last: JobRecord | None = None
     while time.monotonic() < deadline:
         job = get_job(dynamodb, table_name, job_id)
-        if job is not None:
-            last_status = job["status"]
-            if last_status == "processing":
-                return last_status
+        last = job
+        if job is not None and job["status"] != "pending":
+            pending_sizes = [
+                str(size)
+                for size in sizes
+                if (entry := job["sizes"].get(str(size))) is None or entry["status"] == "pending"
+            ]
+            if not pending_sizes:
+                return job
         time.sleep(_POLL_INTERVAL_SECONDS)
+
+    size_summary = None
+    if last is not None:
+        size_summary = {key: entry["status"] for key, entry in last["sizes"].items()}
     pytest.fail(
-        f"job {job_id} did not reach processing within {timeout_seconds}s "
-        f"(last_status={last_status})"
+        f"dispatcher fan-out not observed for job {job_id} within {timeout_seconds}s "
+        f"(last_status={None if last is None else last['status']}, sizes={size_summary}). "
+        "Expected overall status ≠ pending and every configured size ≠ pending "
+        "(worker ESM may consume SQS messages before a test receive)."
     )
 
 
@@ -163,34 +147,21 @@ def test_s3_put_fans_out_sqs_and_marks_processing(
         ContentType="image/jpeg",
     )
 
-    messages = _collect_messages(sqs, queue_url=queue_url, expected=len(sizes))
-    if len(messages) != len(sizes):
-        pytest.fail(
-            "dispatcher did not enqueue one SQS message per configured size "
-            f"(dispatcher={dispatcher}, job_id={job_id}).\n"
-            f"  expected: {len(sizes)} (sizes={sizes})\n"
-            f"  received: {len(messages)}\n"
-            f"  bodies: {[m.get('Body') for m in messages]}"
-        )
-
-    parsed_sizes: set[int] = set()
-    for message in messages:
-        body_raw = message.get("Body")
-        if not isinstance(body_raw, str):
-            pytest.fail(f"SQS message missing Body string: {message!r}")
-        body: object = json.loads(body_raw)
-        if not isinstance(body, dict):
-            pytest.fail(f"SQS body was not a JSON object: {body_raw!r}")
-        assert body.get("job_id") == job_id
-        assert body.get("input_key") == input_key
-        size = body.get("size")
-        if not isinstance(size, int) or isinstance(size, bool):
-            pytest.fail(f"SQS body size is not an int: {body!r}")
-        parsed_sizes.add(size)
-
-    assert parsed_sizes == set(sizes), (
-        f"SQS sizes mismatch (job_id={job_id}): got {sorted(parsed_sizes)} want {sizes}"
+    job = _wait_for_fan_out(
+        dynamodb,
+        table_name=table,
+        job_id=job_id,
+        sizes=sizes,
     )
 
-    status = _wait_for_processing(dynamodb, table_name=table, job_id=job_id)
-    assert status == "processing"
+    # Dispatcher must leave pending; workers may already have rolled up to failed
+    # on permanent image errors from the fake upload body.
+    assert job["status"] in {"processing", "failed"}, (
+        f"unexpected overall status after fan-out (dispatcher={dispatcher}, "
+        f"job_id={job_id}): {job['status']}"
+    )
+    for size in sizes:
+        size_status = job["sizes"][str(size)]["status"]
+        assert size_status != "pending", (
+            f"size {size} still pending after fan-out (job_id={job_id}, job={job})"
+        )
