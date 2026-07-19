@@ -3,6 +3,7 @@ from .keys import (
     OUTPUT_CONTENT_TYPE,
     build_input_key,
     build_output_key,
+    parse_input_key,
     validate_upload_content_type,
 )
 from .operations import (
@@ -24,6 +25,7 @@ __all__ = [
     "build_output_key",
     "generate_presigned_put_url",
     "get_input_object",
+    "parse_input_key",
     "put_output_object",
     "validate_upload_content_type",
 ]

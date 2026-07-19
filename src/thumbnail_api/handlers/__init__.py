@@ -1,1 +1,1 @@
-"""API Gateway / event Lambda handlers."""
+"""Lambda entrypoints (API Gateway, S3, SQS)."""

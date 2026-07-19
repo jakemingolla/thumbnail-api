@@ -13,7 +13,7 @@ Related contracts (owned elsewhere):
 |---------|-------------|
 | Queue | Single work queue (URL/ARN from config / Terraform). |
 | Body encoding | UTF-8 JSON object in the SQS `MessageBody`. |
-| Fan-out | Dispatcher must send exactly one message per configured size for the job. |
+| Fan-out | Dispatcher must send exactly one message per configured size for the job, after an input `ObjectCreated` for a key matching `uploads/{job_id}/original`. Unexpected keys must not enqueue messages. |
 | Worker batch size | Event source mapping **batch size must be 1** initially (one SQS record per Lambda invocation). Larger batches are out of scope until a later ticket revises this document. |
 
 Visibility timeout is a Terraform operational knob (`infra/sqs.tf`). Concrete **`maxReceiveCount` is 5** (v1); failure / redrive semantics (when a size or job becomes `failed`, transient vs permanent, last-receive behavior) are normative only in `job-state-machine.md` — do not duplicate the full rules here.
