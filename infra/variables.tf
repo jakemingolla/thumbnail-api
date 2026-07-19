@@ -87,3 +87,58 @@ variable "sqs_receive_wait_time_seconds" {
   type        = number
   default     = 20
 }
+
+variable "lambda_runtime" {
+  description = "Python runtime for API Lambdas. Must match just package / LocalStack."
+  type        = string
+  default     = "python3.13"
+}
+
+variable "lambda_architectures" {
+  description = <<-EOT
+    Lambda instruction set. Must match wheels from just package
+    (Apple Silicon → arm64 / aarch64-unknown-linux-gnu; otherwise x86_64).
+  EOT
+  type        = list(string)
+  default     = ["arm64"]
+}
+
+variable "lambda_environment" {
+  description = "ENVIRONMENT value injected into Lambda (Config.environment)."
+  type        = string
+  default     = "local"
+}
+
+variable "lambda_aws_endpoint_url" {
+  description = <<-EOT
+    AWS_ENDPOINT_URL inside Lambda containers. Use the in-network LocalStack
+    edge (default http://localhost.localstack.cloud:4566), not the host-mapped
+    LOCALSTACK_ENDPOINT from .localstack.env — host 127.0.0.1:<edge-port> is
+    unreachable from Lambda Docker sidecars.
+  EOT
+  type        = string
+  default     = "http://localhost.localstack.cloud:4566"
+}
+
+variable "api_lambda_timeout_seconds" {
+  description = "Timeout for create_job / get_job Lambdas."
+  type        = number
+  default     = 30
+}
+
+variable "api_lambda_memory_size" {
+  description = "Memory (MB) for create_job / get_job Lambdas."
+  type        = number
+  default     = 256
+}
+
+variable "thumbnail_sizes" {
+  description = "Configured thumbnail sizes (pixels) for THUMBNAIL_SIZES env. Must match docs/specification/sqs-messages.md."
+  type        = list(number)
+  default     = [128, 256, 512]
+
+  validation {
+    condition     = length(var.thumbnail_sizes) > 0 && alltrue([for size in var.thumbnail_sizes : size > 0])
+    error_message = "thumbnail_sizes must be a non-empty list of positive integers."
+  }
+}

@@ -104,6 +104,56 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 API Lambdas use distinct roles from the pipeline (`thumbnail-api-create-job`, `thumbnail-api-get-job` by default): DynamoDB create/get on the jobs table and input-bucket `PutObject` for presigned uploads only — no SQS or output-bucket write. Outputs: `api_create_job_role_arn`, `api_get_job_role_arn`.
 
+### API Lambda functions
+
+Terraform (`infra/lambda_api.tf`) registers both handlers after `just package` has written `dist/lambda/api.zip` (apply fails if the zip is missing — `filebase64sha256` reads it at plan time).
+
+| Function (default `name_prefix`) | Handler | Role | Outputs |
+|----------------------------------|---------|------|---------|
+| `thumbnail-api-create-job` | `thumbnail_api.handlers.create_job.handler` | `api_create_job` | `api_create_job_function_name`, `api_create_job_function_arn` |
+| `thumbnail-api-get-job` | `thumbnail_api.handlers.get_job.handler` | `api_get_job` | `api_get_job_function_name`, `api_get_job_function_arn` |
+
+Runtime defaults: `python3.13`, `arm64` (match `just package` on Apple Silicon; override `lambda_architectures` / package platform on x86 hosts). Timeout 30s, memory 256 MB.
+
+Env injected into both functions (see [Lambda / app environment variables](#lambda--app-environment-variables)):
+
+| Variable | Source |
+|----------|--------|
+| `ENVIRONMENT` | `var.lambda_environment` (default `local`) |
+| `INPUT_BUCKET` / `OUTPUT_BUCKET` / `JOBS_TABLE` | Terraform bucket/table resources |
+| `QUEUE_URL` | Work queue URL (required by shared `Config`; API handlers do not send) |
+| `AWS_ENDPOINT_URL` | `var.lambda_aws_endpoint_url` — default `http://localhost.localstack.cloud:4566` (in-Lambda edge; **not** host `LOCALSTACK_ENDPOINT`) |
+| `AWS_REGION` | `var.aws_region` |
+| `THUMBNAIL_SIZES` | `var.thumbnail_sizes` (default `128,256,512`) |
+
+HTTP routes are out of scope here (THUMB-017). For debugging, invoke the functions directly with API Gateway proxy-shaped events:
+
+```bash
+set -a && source .localstack.env && set +a
+CREATE_FN=$(cd infra && terraform output -raw api_create_job_function_name)
+GET_FN=$(cd infra && terraform output -raw api_get_job_function_name)
+
+# create_job → 201 + job_id / upload_url / input_key / status
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
+  --function-name "$CREATE_FN" \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"body":"{\"content_type\":\"image/jpeg\"}","headers":{"content-type":"application/json"},"isBase64Encoded":false}' \
+  /tmp/create-job-out.json
+cat /tmp/create-job-out.json
+
+JOB_ID=$(python3 -c 'import json; r=json.load(open("/tmp/create-job-out.json")); print(json.loads(r["body"])["job_id"])')
+
+# get_job → 200 + Job wire shape (or 404 if the id is unknown)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
+  --function-name "$GET_FN" \
+  --cli-binary-format raw-in-base64-out \
+  --payload "{\"pathParameters\":{\"job_id\":\"${JOB_ID}\"}}" \
+  /tmp/get-job-out.json
+cat /tmp/get-job-out.json
+```
+
+Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — full upload flow is covered once API Gateway lands (THUMB-017).
+
 ## Lambda packaging
 
 Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
@@ -119,7 +169,7 @@ Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manua
 | API handlers (`create_job`, `get_job`) | `dist/lambda/api.zip` | `filename = "${path.module}/../dist/lambda/api.zip"` |
 | Pipeline handlers (`dispatcher`, `worker`) | `dist/lambda/pipeline.zip` | `filename = "${path.module}/../dist/lambda/pipeline.zip"` |
 
-Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function, e.g. `thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler` (wire in THUMB-016). Extend or split `pipeline.zip` when dispatcher/worker land (THUMB-019 / THUMB-022) if their deps diverge.
+Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler`). Extend or split `pipeline.zip` when dispatcher/worker land (THUMB-019 / THUMB-022) if their deps diverge.
 
 ### Native deps (Pillow)
 
@@ -153,7 +203,8 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `QUEUE_URL` | SQS work queue URL |
 | `AWS_ENDPOINT_URL` | LocalStack edge URL for boto3 (`endpoint_url`) |
 
-Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when running against this worktree’s LocalStack.
+- **Host / CLI / Terraform provider:** use `LOCALSTACK_ENDPOINT` from `.localstack.env`.
+- **Inside Lambda (Terraform `environment`):** use `lambda_aws_endpoint_url` (default `http://localhost.localstack.cloud:4566`). Do not inject the host-mapped edge port into Lambda env.
 
 ### Optional
 
@@ -173,6 +224,7 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
+| `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `dist/lambda/api.zip` | API Lambda zip (generated; gitignored) |
 | `dist/lambda/pipeline.zip` | Pipeline Lambda zip (generated; gitignored) |
