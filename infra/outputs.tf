@@ -108,6 +108,21 @@ output "api_get_job_function_arn" {
   value       = aws_lambda_function.api_get_job.arn
 }
 
+output "api_id" {
+  description = "API Gateway REST API id (for LocalStack execute-api URL path)."
+  value       = aws_api_gateway_rest_api.jobs.id
+}
+
+output "api_stage_name" {
+  description = "Deployed API Gateway stage name."
+  value       = aws_api_gateway_stage.jobs.stage_name
+}
+
+output "api_base_url" {
+  description = "Host-facing jobs API base URL (LocalStack path-style execute-api). Append /jobs."
+  value       = local.api_base_url
+}
+
 output "dispatcher_role_arn" {
   description = "IAM role ARN for the dispatcher Lambda (SQS SendMessage + jobs UpdateItem/GetItem)."
   value       = aws_iam_role.dispatcher.arn
