@@ -214,13 +214,13 @@ Zips target **Linux** wheels for LocalStack’s Docker Lambda runtime (not macOS
 
 | Host arch | Default `--python-platform` |
 |-----------|------------------------------|
-| `arm64` / `aarch64` | `aarch64-unknown-linux-gnu` |
-| otherwise | `x86_64-unknown-linux-gnu` |
+| `arm64` / `aarch64` | `aarch64-manylinux_2_28` |
+| otherwise | `x86_64-manylinux_2_28` |
 
-Override with `LAMBDA_PYTHON_PLATFORM` (and optionally `LAMBDA_PYTHON_VERSION`, default `3.13`) if your LocalStack Lambda arch differs.
+Override with `LAMBDA_PYTHON_PLATFORM` (and optionally `LAMBDA_PYTHON_VERSION`, default `3.13`) if your LocalStack Lambda arch differs. `just package` uses `--only-binary :all:` so native deps must have published wheels for that platform (no host compile).
 
 - **boto3 / botocore**: omitted from the zip (pruned at export); use the runtime-provided SDK.
-- **Pillow** (and other native wheels): not a project dependency yet; when added under `[project].dependencies`, `just package` installs manylinux wheels for the platform above — do not `pip install` Pillow on the Mac host into the artifact.
+- **Pillow** (and other native wheels): installed as manylinux wheels for the platform above — do not `pip install` Pillow on the Mac host into the artifact. Pillow 12.x needs `manylinux_2_28` (not `*-unknown-linux-gnu` / manylinux2014).
 - Prefer zip + correct platform for LocalStack. Container/`image_uri` packaging is out of scope unless zip proves insufficient.
 
 Exported requirements (debug): `dist/lambda/requirements.lambda.txt`.
