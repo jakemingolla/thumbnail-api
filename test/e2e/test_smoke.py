@@ -1,7 +1,7 @@
 """Minimal e2e smoke: LocalStack healthy + Terraform skeleton outputs readable.
 
 Full create → upload → poll → thumbnails coverage lives in later tickets
-(THUMB-017/020/022/025). Add scenarios beside this file as features land.
+(THUMB-017/020/025). Worker one-size path: ``test_worker.py``.
 """
 
 from __future__ import annotations
@@ -22,6 +22,9 @@ _REQUIRED_OUTPUTS = (
     "work_dlq_url",
     "api_create_job_role_arn",
     "api_get_job_role_arn",
+    "worker_function_name",
+    "worker_event_source_mapping_uuid",
+    "sqs_max_receive_count",
 )
 
 

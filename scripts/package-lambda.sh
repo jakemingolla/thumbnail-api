@@ -76,6 +76,14 @@ tar -C "${REPO_ROOT}/src" \
   -cf - thumbnail_api \
   | tar -C "${BUILD_DIR}" -xf -
 
+# Worker (THUMB-022) needs Pillow at runtime — fail fast if the Linux wheel missing.
+if [[ ! -d "${BUILD_DIR}/PIL" ]]; then
+  echo "error: Pillow (PIL) missing from Lambda build under ${BUILD_DIR}" >&2
+  echo "  platform=${PYTHON_PLATFORM} python=${PYTHON_VERSION}" >&2
+  echo "  check dist/lambda/requirements.lambda.txt and manylinux wheel resolution" >&2
+  exit 1
+fi
+
 write_zip() {
   local dest="$1"
   local tmp
@@ -95,7 +103,7 @@ write_zip() {
 }
 
 write_zip "${API_ZIP}"
-# Same payload today; Terraform can pin distinct filenames. Split later if worker deps diverge.
+# Same payload (includes Pillow for the worker). Distinct filenames for Terraform wiring.
 cp -f "${API_ZIP}" "${PIPELINE_ZIP}"
 
 # Drop the staging tree; keep requirements list for debugging / Terraform notes.

@@ -1,5 +1,5 @@
 # Work queue + DLQ for thumbnail size fan-out (dispatcher → worker).
-# Event source mapping to the worker Lambda is THUMB-022.
+# Worker event source mapping: infra/lambda_pipeline.tf (batch size 1).
 
 resource "aws_sqs_queue" "work_dlq" {
   name = "${local.name_prefix}-work-dlq"
@@ -16,7 +16,7 @@ resource "aws_sqs_queue" "work_dlq" {
 resource "aws_sqs_queue" "work" {
   name = "${local.name_prefix}-work"
 
-  # Must cover a single worker invocation; raise alongside Lambda timeout in THUMB-022.
+  # Must cover a single worker invocation (see var.worker_lambda_timeout_seconds).
   visibility_timeout_seconds = var.sqs_visibility_timeout_seconds
   message_retention_seconds  = var.sqs_message_retention_seconds
   receive_wait_time_seconds  = var.sqs_receive_wait_time_seconds
