@@ -104,6 +104,40 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 API Lambdas use distinct roles from the pipeline (`thumbnail-api-create-job`, `thumbnail-api-get-job` by default): DynamoDB create/get on the jobs table and input-bucket `PutObject` for presigned uploads only — no SQS or output-bucket write. Outputs: `api_create_job_role_arn`, `api_get_job_role_arn`.
 
+## Lambda packaging
+
+Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
+
+```bash
+just package
+```
+
+Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manual cleanup.
+
+| Artifact | Path (from repo root) | Terraform use |
+|----------|----------------------|---------------|
+| API handlers (`create_job`, `get_job`) | `dist/lambda/api.zip` | `filename = "${path.module}/../dist/lambda/api.zip"` |
+| Pipeline handlers (`dispatcher`, `worker`) | `dist/lambda/pipeline.zip` | `filename = "${path.module}/../dist/lambda/pipeline.zip"` |
+
+Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function, e.g. `thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler` (wire in THUMB-016). Extend or split `pipeline.zip` when dispatcher/worker land (THUMB-019 / THUMB-022) if their deps diverge.
+
+### Native deps (Pillow)
+
+Zips target **Linux** wheels for LocalStack’s Docker Lambda runtime (not macOS host wheels):
+
+| Host arch | Default `--python-platform` |
+|-----------|------------------------------|
+| `arm64` / `aarch64` | `aarch64-unknown-linux-gnu` |
+| otherwise | `x86_64-unknown-linux-gnu` |
+
+Override with `LAMBDA_PYTHON_PLATFORM` (and optionally `LAMBDA_PYTHON_VERSION`, default `3.13`) if your LocalStack Lambda arch differs.
+
+- **boto3 / botocore**: omitted from the zip (pruned at export); use the runtime-provided SDK.
+- **Pillow** (and other native wheels): not a project dependency yet; when added under `[project].dependencies`, `just package` installs manylinux wheels for the platform above — do not `pip install` Pillow on the Mac host into the artifact.
+- Prefer zip + correct platform for LocalStack. Container/`image_uri` packaging is out of scope unless zip proves insufficient.
+
+Exported requirements (debug): `dist/lambda/requirements.lambda.txt`.
+
 ## Lambda / app environment variables
 
 Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.py`). Missing required values fail fast.
@@ -139,6 +173,9 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
+| `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
+| `dist/lambda/api.zip` | API Lambda zip (generated; gitignored) |
+| `dist/lambda/pipeline.zip` | Pipeline Lambda zip (generated; gitignored) |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |
 | `src/thumbnail_api/s3/` | Key builders, path-style presigned PUT, worker get/put |
 | `.env.example` | Sample Lambda/app env var names for local runs |
