@@ -239,6 +239,50 @@ Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`loc
 
 Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
 
+### Dispatcher Lambda + S3 notification
+
+Terraform (`infra/lambda_pipeline.tf`) registers the dispatcher after `just package` has written `dist/lambda/pipeline.zip`. The input bucket notifies on `s3:ObjectCreated:*` with prefix `uploads/` (see `docs/specification/s3-keys.md`).
+
+| Function (default `name_prefix`) | Handler | Role | Outputs |
+|----------------------------------|---------|------|---------|
+| `thumbnail-dispatcher` | `thumbnail_api.handlers.dispatcher.handler` | `dispatcher` | `dispatcher_function_name`, `dispatcher_function_arn` |
+
+Same runtime/arch defaults as API Lambdas. Env matches the shared `Config` keys (including `QUEUE_URL` and `THUMBNAIL_SIZES`). Worker function wiring is THUMB-022.
+
+Smoke without the HTTP API (seed via `create_job`, then PUT the original):
+
+```bash
+set -a && source .localstack.env && set +a
+CREATE_FN=$(cd infra && terraform output -raw api_create_job_function_name)
+BUCKET=$(cd infra && terraform output -raw input_bucket_name)
+QUEUE=$(cd infra && terraform output -raw work_queue_url)
+TABLE=$(cd infra && terraform output -raw jobs_table_name)
+
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
+  --function-name "$CREATE_FN" \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"body":"{\"content_type\":\"image/jpeg\"}","headers":{"content-type":"application/json"},"isBase64Encoded":false}' \
+  /tmp/create-job-out.json
+JOB_ID=$(python3 -c 'import json; r=json.load(open("/tmp/create-job-out.json")); print(json.loads(r["body"])["job_id"])')
+INPUT_KEY=$(python3 -c 'import json; r=json.load(open("/tmp/create-job-out.json")); print(json.loads(r["body"])["input_key"])')
+
+# ObjectCreated under uploads/ → dispatcher → N work messages (default sizes: 3)
+echo 'fake-jpeg' | aws --endpoint-url "$LOCALSTACK_ENDPOINT" s3 cp - "s3://${BUCKET}/${INPUT_KEY}" \
+  --content-type image/jpeg
+
+# expect: one MessageBody per configured size (job_id / input_key / size)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs receive-message \
+  --queue-url "$QUEUE" --max-number-of-messages 10 --wait-time-seconds 10
+
+# expect: status processing
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb get-item \
+  --table-name "$TABLE" \
+  --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+  --consistent-read
+```
+
+If the queue is empty, wait a few seconds and receive again (LocalStack notification latency). Purge the work queue between smokes if leftover messages confuse counts: `aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs purge-queue --queue-url "$QUEUE"`.
+
 ## Lambda packaging
 
 Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
@@ -254,7 +298,7 @@ Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manua
 | API handlers (`create_job`, `get_job`) | `dist/lambda/api.zip` | `filename = "${path.module}/../dist/lambda/api.zip"` |
 | Pipeline handlers (`dispatcher`, `worker`) | `dist/lambda/pipeline.zip` | `filename = "${path.module}/../dist/lambda/pipeline.zip"` |
 
-Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler`). Extend or split `pipeline.zip` when dispatcher/worker land (THUMB-019 / THUMB-022) if their deps diverge.
+Both zips currently share the same payload (installable `thumbnail_api` + runtime third-party deps). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `thumbnail_api.handlers.get_job.handler` / `thumbnail_api.handlers.dispatcher.handler`). Extend or split `pipeline.zip` when the worker lands (THUMB-022) if its deps diverge.
 
 ### Native deps (Pillow)
 
@@ -311,6 +355,7 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
+| `infra/lambda_pipeline.tf` | dispatcher Lambda + input-bucket S3 notification |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |

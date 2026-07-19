@@ -133,6 +133,21 @@ output "dispatcher_role_name" {
   value       = aws_iam_role.dispatcher.name
 }
 
+output "dispatcher_function_name" {
+  description = "Lambda function name for the S3 ObjectCreated dispatcher."
+  value       = aws_lambda_function.dispatcher.function_name
+}
+
+output "dispatcher_function_arn" {
+  description = "ARN of the S3 ObjectCreated dispatcher Lambda."
+  value       = aws_lambda_function.dispatcher.arn
+}
+
+output "thumbnail_sizes" {
+  description = "Configured thumbnail sizes (pixels) injected as THUMBNAIL_SIZES."
+  value       = var.thumbnail_sizes
+}
+
 output "worker_role_arn" {
   description = "IAM role ARN for the worker Lambda (SQS consume + input GetObject + output PutObject + jobs updates)."
   value       = aws_iam_role.worker.arn
