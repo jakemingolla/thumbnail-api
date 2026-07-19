@@ -132,6 +132,18 @@ variable "api_lambda_memory_size" {
   default     = 256
 }
 
+variable "dispatcher_lambda_timeout_seconds" {
+  description = "Timeout for the S3 → SQS dispatcher Lambda."
+  type        = number
+  default     = 30
+}
+
+variable "dispatcher_lambda_memory_size" {
+  description = "Memory (MB) for the S3 → SQS dispatcher Lambda."
+  type        = number
+  default     = 256
+}
+
 variable "thumbnail_sizes" {
   description = "Configured thumbnail sizes (pixels) for THUMBNAIL_SIZES env. Must match docs/specification/sqs-messages.md."
   type        = list(number)

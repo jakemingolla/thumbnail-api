@@ -1,7 +1,7 @@
 """Minimal e2e smoke: LocalStack healthy + Terraform skeleton outputs readable.
 
 Full create → upload → poll → thumbnails coverage lives in later tickets
-(THUMB-017/020/022/025). Add scenarios beside this file as features land.
+(THUMB-017/022/025). Dispatcher upload fan-out: ``test_dispatcher.py``.
 """
 
 from __future__ import annotations
@@ -22,6 +22,8 @@ _REQUIRED_OUTPUTS = (
     "work_dlq_url",
     "api_create_job_role_arn",
     "api_get_job_role_arn",
+    "dispatcher_function_name",
+    "thumbnail_sizes",
 )
 
 

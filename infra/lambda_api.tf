@@ -1,5 +1,5 @@
 # API Lambdas (create_job / get_job). Artifact: dist/lambda/api.zip (just package).
-# HTTP routes: THUMB-017. Pipeline functions: THUMB-019 / THUMB-022.
+# HTTP routes: THUMB-017. Pipeline: lambda_pipeline.tf (dispatcher); worker THUMB-022.
 
 locals {
   api_lambda_zip = "${path.module}/../dist/lambda/api.zip"
