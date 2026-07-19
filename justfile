@@ -101,4 +101,17 @@ upload-watch image *args: uv
       source .localstack.env
       set +a
     fi
-    uv run python scripts/upload_watch.py "{{image}}" {{args}}
+    uv run python -m thumbnail_api.cli upload-watch "{{image}}" {{args}}
+
+# Download complete thumbnails for JOB_ID to {size}.jpg (needs prior apply)
+# Example: just download-job "$JOB_ID" --out-dir ./thumbs
+download-job job_id *args: uv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .localstack.env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .localstack.env
+      set +a
+    fi
+    uv run python -m thumbnail_api.cli download-job "{{job_id}}" {{args}}
