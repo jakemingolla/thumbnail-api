@@ -104,6 +104,10 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 API Lambdas use distinct roles from the pipeline (`thumbnail-api-create-job`, `thumbnail-api-get-job` by default): DynamoDB create/get on the jobs table and input-bucket `PutObject` for presigned uploads only — no SQS or output-bucket write. Outputs: `api_create_job_role_arn`, `api_get_job_role_arn`.
 
+### Pipeline Lambda IAM roles
+
+Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
+
 ## Lambda packaging
 
 Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
@@ -173,6 +177,7 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
+| `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `dist/lambda/api.zip` | API Lambda zip (generated; gitignored) |
 | `dist/lambda/pipeline.zip` | Pipeline Lambda zip (generated; gitignored) |
