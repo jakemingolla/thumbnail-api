@@ -30,8 +30,8 @@ just test-e2e
 What it does:
 
 1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
-2. Runs `just package` (Lambda zips as available).
-3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`.
+2. Runs `just package` (Lambda zips as available; host-native Linux wheels).
+3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`, passing `lambda_architectures` for the host (`arm64` on Apple Silicon, `x86_64` on CI/ubuntu) so it matches the zip.
 4. `uv run python -m pytest test/e2e/ -m e2e`.
 5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
 

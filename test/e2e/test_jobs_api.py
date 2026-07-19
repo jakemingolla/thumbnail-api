@@ -49,6 +49,11 @@ def _http_json(
     except urllib.error.HTTPError as exc:
         status = exc.code
         raw = exc.read().decode()
+    except TimeoutError as exc:
+        pytest.fail(
+            f"HTTP {method} {url} timed out after {timeout}s "
+            f"(Lambda arch mismatch or API Gateway invoke hang?): {exc}"
+        )
     except urllib.error.URLError as exc:
         pytest.fail(f"HTTP {method} {url} failed: {exc}")
 
