@@ -186,9 +186,23 @@ On a duplicate `ObjectCreated` for an input key the dispatcher already handled:
 4. Size status updates must use conditions (or equivalent compare-and-set) so illegal transitions in this document are rejected rather than applied.
 5. Job rollup after a no-op size update must still obey terminal overall status (never leave `failed` / `complete`).
 
+### Conditional write outcomes (shared helpers)
+
+Shared DynamoDB helpers (and any equivalent writer) must use condition expressions so rejected illegal transitions do not mutate the item. The following condition failures are **success / no-op** for the caller (not errors), provided the item still exists:
+
+| Write | Condition (conceptual) | No-op when |
+|-------|------------------------|------------|
+| Create job | `attribute_not_exists(job_id)` | — (duplicate `job_id` is an error: do not overwrite) |
+| Overall `pending` → `processing` | `#status = pending` | Status is already `processing`, `complete`, or `failed` |
+| Size claim → `processing` | `sizes.<size>.status = pending` | Size is already `processing`, `complete`, or `failed` |
+| Size → `complete` + `output_key` | `sizes.<size>.status = processing` | Size is already `complete` (leave `output_key`) or `failed` (must not overwrite) |
+| Size → `failed` | `sizes.<size>.status IN (pending, processing)` | Size is already `failed` or `complete` (must not overwrite `complete`) |
+
+Rollup of overall status after a size becomes terminal must not move a job out of `complete` or `failed`. Prefer `ReturnValues=ALL_NEW` on the size update, then a separate conditional overall update with `#status = processing` when the computed rollup differs.
+
 ### Create-job
 
-`job_id` must be unique per create. A client retry that generates a new `job_id` creates a distinct job; that is not a duplicate delivery of the same job.
+`job_id` must be unique per create. A client retry that generates a new `job_id` creates a distinct job; that is not a duplicate delivery of the same job. Put-item for create must use `attribute_not_exists(job_id)` (or equivalent) so a reused id cannot clobber an existing record.
 
 ---
 
@@ -237,7 +251,7 @@ Handlers must persist items that conform to this sketch (attribute names and nes
 
 Optional attribute (should, not must, for v1): `sizes.<size>.error` — short string reason when status is `failed`. If present, get-job may surface it; absence must not break clients.
 
-Concrete size key set in examples (`128` / `256` / `512`) must match the v1 list in `sqs-messages.md` once that spec exists; until then treat those three as the assumed default.
+Concrete size key set in examples (`128` / `256` / `512`) must match the v1 list in `sqs-messages.md`.
 
 ### Example: processing with mixed sizes
 
