@@ -30,8 +30,8 @@ just test-e2e
 What it does:
 
 1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
-2. Runs `just package` (Lambda zips as available).
-3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`.
+2. Runs `just package` (Lambda zips as available; host-native Linux wheels).
+3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`, passing `lambda_architectures` for the host (`arm64` on Apple Silicon, `x86_64` on CI/ubuntu) so it matches the zip.
 4. `uv run python -m pytest test/e2e/ -m e2e`.
 5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
 
@@ -41,7 +41,7 @@ Do not run bare `pytest test/e2e/` without the harness — env and apply will be
 
 ### CI (GitHub Actions)
 
-On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same smoke as local: LocalStack healthy + skeleton apply + outputs readable.
+On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same as local: LocalStack healthy + apply + outputs readable, plus feature scenarios under `test/e2e/` (e.g. jobs HTTP create → get).
 
 ## Endpoint
 
@@ -159,7 +159,55 @@ Env injected into both functions (see [Lambda / app environment variables](#lamb
 | `AWS_REGION` | `var.aws_region` |
 | `THUMBNAIL_SIZES` | `var.thumbnail_sizes` (default `128,256,512`) |
 
-HTTP routes are out of scope here (THUMB-017). For debugging, invoke the functions directly with API Gateway proxy-shaped events:
+### API Gateway (jobs HTTP)
+
+Terraform (`infra/api_gateway.tf`) exposes a REST API with Lambda proxy (`AWS_PROXY`):
+
+| Method | Path | Lambda |
+|--------|------|--------|
+| `POST` | `/jobs` | `thumbnail-api-create-job` |
+| `GET` | `/jobs/{job_id}` | `thumbnail-api-get-job` |
+
+Stage default: `dev` (`var.api_stage_name`). Image bytes never go through the gateway — clients upload via the presigned `upload_url` from `POST /jobs` (S3 / LocalStack S3).
+
+#### Obtain `API_BASE`
+
+After apply, prefer the Terraform output (uses this worktree’s `LOCALSTACK_ENDPOINT` edge port):
+
+```bash
+set -a && source .localstack.env && set +a
+export API_BASE="$(cd infra && terraform output -raw api_base_url)"
+# e.g. http://127.0.0.1:<edge-port>/_aws/execute-api/<apiId>/dev
+```
+
+Equivalent pattern from `apiId` + stage (matches [`docs/specification/api.md`](../specification/api.md)):
+
+```bash
+API_ID=$(cd infra && terraform output -raw api_id)
+STAGE=$(cd infra && terraform output -raw api_stage_name)
+export API_BASE="${LOCALSTACK_ENDPOINT}/_aws/execute-api/${API_ID}/${STAGE}"
+```
+
+Outputs: `api_id`, `api_stage_name`, `api_base_url`.
+
+#### HTTP smoke (create → get)
+
+```bash
+set -a && source .localstack.env && set +a
+export API_BASE="$(cd infra && terraform output -raw api_base_url)"
+
+RESP=$(curl -sS -X POST "$API_BASE/jobs" \
+  -H 'Content-Type: application/json' \
+  -d '{"content_type":"image/jpeg"}')
+echo "$RESP" | jq .
+JOB_ID=$(echo "$RESP" | jq -r .job_id)
+
+curl -sS "$API_BASE/jobs/$JOB_ID" | jq .
+```
+
+E2E covers the same slice (`test/e2e/test_jobs_api.py` via `just test-e2e`). Upload → pipeline assertions are later tickets.
+
+For debugging without HTTP, invoke the functions directly with API Gateway proxy-shaped events:
 
 ```bash
 set -a && source .localstack.env && set +a
@@ -185,7 +233,7 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
 cat /tmp/get-job-out.json
 ```
 
-Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — full upload flow is covered once API Gateway lands (THUMB-017).
+Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — covered when the full upload path lands in e2e/runbook tickets.
 
 ### Pipeline Lambda IAM roles
 
@@ -263,6 +311,7 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
+| `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |

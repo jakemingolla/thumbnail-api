@@ -142,3 +142,14 @@ variable "thumbnail_sizes" {
     error_message = "thumbnail_sizes must be a non-empty list of positive integers."
   }
 }
+
+variable "api_stage_name" {
+  description = "API Gateway stage name (included in API_BASE). Default matches docs/specification/api.md LocalStack examples."
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = length(var.api_stage_name) > 0
+    error_message = "api_stage_name must be non-empty."
+  }
+}
