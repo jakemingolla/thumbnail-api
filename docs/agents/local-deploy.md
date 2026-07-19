@@ -98,6 +98,10 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 (`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
 
+### Pipeline Lambda IAM roles
+
+Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
+
 ## Lambda / app environment variables
 
 Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.py`). Missing required values fail fast.
@@ -132,6 +136,7 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
+| `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |
 | `.env.example` | Sample Lambda/app env var names for local runs |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |
