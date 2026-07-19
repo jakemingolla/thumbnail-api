@@ -12,7 +12,7 @@ locals {
     ManagedBy   = "terraform"
   }
 
-  # Convenience aliases for Lambda env wiring (THUMB-019 / THUMB-022).
+  # Convenience aliases for Lambda env wiring (API + pipeline).
   work_queue_url = aws_sqs_queue.work.url
   work_queue_arn = aws_sqs_queue.work.arn
   work_dlq_url   = aws_sqs_queue.work_dlq.url

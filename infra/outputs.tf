@@ -88,6 +88,26 @@ output "api_get_job_role_name" {
   value       = aws_iam_role.api_get_job.name
 }
 
+output "api_create_job_function_name" {
+  description = "Lambda function name for create_job (direct invoke / API Gateway)."
+  value       = aws_lambda_function.api_create_job.function_name
+}
+
+output "api_create_job_function_arn" {
+  description = "ARN of the create_job Lambda."
+  value       = aws_lambda_function.api_create_job.arn
+}
+
+output "api_get_job_function_name" {
+  description = "Lambda function name for get_job (direct invoke / API Gateway)."
+  value       = aws_lambda_function.api_get_job.function_name
+}
+
+output "api_get_job_function_arn" {
+  description = "ARN of the get_job Lambda."
+  value       = aws_lambda_function.api_get_job.arn
+}
+
 output "dispatcher_role_arn" {
   description = "IAM role ARN for the dispatcher Lambda (SQS SendMessage + jobs UpdateItem/GetItem)."
   value       = aws_iam_role.dispatcher.arn
