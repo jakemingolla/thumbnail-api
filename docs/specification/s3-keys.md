@@ -95,6 +95,24 @@ Clients should treat the original as opaque bytes typed by `Content-Type`. Worke
 
 Workers must set `Content-Type: image/jpeg` when writing output objects.
 
+## Thumbnail processing (resize and encode)
+
+Normative resize/encode policy for every thumbnail object. Shared helper:
+`thumbnail_api.images.resize_to_jpeg`. Workers must apply this policy (or call that
+helper) so clients and the pipeline agree on bytes written to output keys.
+
+| Concern | Requirement |
+|---------|-------------|
+| Resize mode | **Max-dimension fit** — scale so both edges are ≤ `max_size` pixels, preserving aspect ratio. `max_size` is the integer size from the work message / configured sizes (see `sqs-messages.md`). |
+| Upscale | Must **not** upscale: if both edges are already ≤ `max_size`, keep pixel dimensions unchanged (still re-encode as JPEG). |
+| Filter | High-quality downscale (LANCZOS or equivalent). |
+| Output encoding | JPEG, quality **85**, `optimize=True`. Bytes must be valid `image/jpeg`. |
+| Color | Flatten alpha onto white when present; convert to RGB before JPEG encode. |
+| EXIF orientation | Apply EXIF orientation before measuring/resizing so “longest edge” matches displayed orientation. |
+| Corrupt / non-image input | Must fail with a clear permanent processing error (helper: `ImageProcessingError`). Workers must map that to size `failed` per `job-state-machine.md` (permanent error). |
+
+Configured size integers (`128` / `256` / `512` in v1) mean this `max_size` in pixels (longest edge bound), not a forced square crop.
+
 ## LocalStack / path-style addressing
 
 Local development uses LocalStack (or equivalent) as the S3 endpoint.
@@ -121,4 +139,4 @@ Production AWS addressing may use the platform default (virtual-hosted–style);
 
 - CloudFront distributions and public bucket policies
 - Lifecycle, retention, and encryption settings
-- The concrete set of thumbnail `size` values and pixel dimensions
+- The concrete set of thumbnail `size` values (owned by `sqs-messages.md`); this document defines how those integers map to pixels via [Thumbnail processing](#thumbnail-processing-resize-and-encode)

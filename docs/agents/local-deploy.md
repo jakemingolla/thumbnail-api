@@ -100,6 +100,10 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 (`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
 
+### API Lambda IAM roles
+
+API Lambdas use distinct roles from the pipeline (`thumbnail-api-create-job`, `thumbnail-api-get-job` by default): DynamoDB create/get on the jobs table and input-bucket `PutObject` for presigned uploads only — no SQS or output-bucket write. Outputs: `api_create_job_role_arn`, `api_get_job_role_arn`.
+
 ## Lambda / app environment variables
 
 Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.py`). Missing required values fail fast.
@@ -134,6 +138,7 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
+| `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |
 | `src/thumbnail_api/s3/` | Key builders, path-style presigned PUT, worker get/put |
 | `.env.example` | Sample Lambda/app env var names for local runs |

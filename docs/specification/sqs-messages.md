@@ -69,7 +69,7 @@ Rules:
 - A message whose `size` is not in this set is invalid (see below).
 - Changing the set is a contract change: update this document, job records, and config together.
 
-Resize algorithm details (fit, crop, quality) are owned by the image-resize implementation ticket; this document only defines which size integers exist.
+Resize and encode policy (max-dimension fit, no upscale, JPEG quality) is normative in `docs/specification/s3-keys.md` ([Thumbnail processing](s3-keys.md#thumbnail-processing-resize-and-encode)). This document only defines which size integers exist.
 
 ## Validation and malformed messages
 
