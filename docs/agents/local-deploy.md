@@ -30,6 +30,7 @@ just deploy          # localstack-up → package → apply → outputs
 | `just deploy` | same as the four steps above | same as each step |
 | `just upload-watch <image>` | prior apply; `$API_BASE` or tfstate | missing image / `API_BASE` / state; non-zero on fail/timeout |
 | `just download-job <job_id>` | prior apply; complete sizes on the job | missing job / no complete sizes / S3 get failure |
+| `just admin-status` | healthy LocalStack + prior apply (tfstate / env) | edge down, missing queues/table/buckets, missing state |
 
 Env notes:
 
@@ -261,6 +262,19 @@ just download-job "$JOB_ID"
 # Optional: just download-job "$JOB_ID" --out-dir ./thumbs
 ```
 
+#### Admin / debug status
+
+One-command pipeline health across SQS, the jobs table, and S3 (no console). Colorized ASCII bars by default; respects `NO_COLOR` / non-TTY. DynamoDB item count is an exact `Select=COUNT` scan (labeled as such). S3 shows object counts and human-readable total sizes per bucket and prefix (`uploads/`, `thumbnails/`, other).
+
+```bash
+just admin-status
+# Watch: rolling sparklines for work visible / in-flight, DLQ visible, and job count
+just admin-status --watch
+# Optional: just admin-status -w --interval 2 --samples 24
+```
+
+Fails clearly if LocalStack is down or Terraform outputs / resources are missing. Implemented as `python -m thumbnail_api.cli admin-status`.
+
 For debugging without HTTP, invoke the functions directly with API Gateway proxy-shaped events:
 
 ```bash
@@ -462,11 +476,11 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
-| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` / `upload-watch` / `download-job` |
+| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` / `upload-watch` / `download-job` / `admin-status` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/terraform-apply.sh` | `just apply` — terraform init/apply vs LocalStack |
 | `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
-| `src/thumbnail_api/cli/` | `just upload-watch` / `just download-job` (`python -m thumbnail_api.cli`) |
+| `src/thumbnail_api/cli/` | `just upload-watch` / `just download-job` / `just admin-status` (`python -m thumbnail_api.cli`) |
 | `scripts/lib/prereqs.sh` | Shared Docker / terraform prerequisite checks |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |

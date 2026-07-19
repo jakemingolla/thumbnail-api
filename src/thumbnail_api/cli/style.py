@@ -8,6 +8,9 @@ from typing import TextIO
 
 _LABEL_WIDTH = 10
 _KIBIBYTE = 1024.0
+_SPARK_CHARS = "▁▂▃▄▅▆▇█"
+_BAR_FILL = "█"
+_BAR_EMPTY = "░"
 
 
 def color_enabled(stream: TextIO | None = None) -> bool:
@@ -80,6 +83,28 @@ def human_bytes(n: int) -> str:
             return f"{size:.1f} {unit}"
         size /= _KIBIBYTE
     return f"{n} B"
+
+
+def ascii_bar(value: int, *, width: int, scale: int) -> str:
+    """Horizontal bar for ``value`` against ``scale`` (at least 1)."""
+    peak = max(1, scale)
+    filled = min(width, max(0, round((value / peak) * width)))
+    return f"{_BAR_FILL * filled}{_BAR_EMPTY * (width - filled)}"
+
+
+def sparkline(samples: list[int], *, width: int | None = None) -> str:
+    """ASCII sparkline; left-pads with zeros when fewer than ``width`` samples."""
+    if width is None:
+        series = list(samples)
+    elif width <= 0:
+        return ""
+    else:
+        series = ([0] * width + list(samples))[-width:]
+    if not series:
+        return ""
+    peak = max(1, *series)
+    last = len(_SPARK_CHARS) - 1
+    return "".join(_SPARK_CHARS[min(last, round((v / peak) * last))] for v in series)
 
 
 def size_sort_key(size: str) -> tuple[int, int | str]:

@@ -33,14 +33,12 @@ def tf_raw(output_name: str) -> str:
     if not state.is_file():
         msg = (
             f"{state} missing — apply the stack first: just apply "
-            "(or set API_BASE / LOCALSTACK_ENDPOINT / OUTPUT_BUCKET)"
+            "(or set LOCALSTACK_ENDPOINT / resource env vars)"
         )
         raise CliError(msg)
     terraform = shutil.which("terraform")
     if terraform is None:
-        msg = (
-            "terraform is required on PATH (or set API_BASE / LOCALSTACK_ENDPOINT / OUTPUT_BUCKET)"
-        )
+        msg = "terraform is required on PATH (or set LOCALSTACK_ENDPOINT / resource env vars)"
         raise CliError(msg)
     try:
         completed = subprocess.run(  # noqa: S603 — resolved terraform path + fixed args
@@ -88,6 +86,79 @@ def resolve_output_bucket(explicit: str | None) -> str:
     if env:
         return env
     return tf_raw("output_bucket_name")
+
+
+def resolve_input_bucket(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    env = os.environ.get("INPUT_BUCKET", "").strip()
+    if env:
+        return env
+    return tf_raw("input_bucket_name")
+
+
+def resolve_jobs_table(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    env = os.environ.get("JOBS_TABLE", "").strip()
+    if env:
+        return env
+    return tf_raw("jobs_table_name")
+
+
+def resolve_work_queue_url(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    env = os.environ.get("QUEUE_URL", "").strip()
+    if env:
+        return env
+    return tf_raw("work_queue_url")
+
+
+def resolve_work_dlq_url(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    env = os.environ.get("WORK_DLQ_URL", "").strip()
+    if env:
+        return env
+    return tf_raw("work_dlq_url")
+
+
+def aws_region() -> str:
+    return os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+
+
+_HTTP_OK = 200
+_HTTP_BAD_REQUEST = 400
+
+
+def ensure_localstack_healthy(endpoint: str, *, timeout: float = 3.0) -> None:
+    """Fail clearly when the LocalStack edge is down or unreachable."""
+    url = f"{endpoint.rstrip('/')}/_localstack/health"
+    request = urllib.request.Request(url, method="GET")  # noqa: S310 — local edge
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:  # noqa: S310
+            status = int(resp.status)
+    except TimeoutError as exc:
+        msg = (
+            f"LocalStack health check timed out at {endpoint}\n"
+            "  Start or recreate: just localstack-up\n"
+            f'  Health: curl -sf "{endpoint}/_localstack/health" | jq .'
+        )
+        raise CliError(msg) from exc
+    except urllib.error.URLError as exc:
+        msg = (
+            f"LocalStack is not healthy at {endpoint}: {exc.reason}\n"
+            "  Start or recreate: just localstack-up\n"
+            f'  Health: curl -sf "{endpoint}/_localstack/health" | jq .'
+        )
+        raise CliError(msg) from exc
+    if status < _HTTP_OK or status >= _HTTP_BAD_REQUEST:
+        msg = (
+            f"LocalStack health check failed status={status} at {endpoint}\n"
+            "  Start or recreate: just localstack-up"
+        )
+        raise CliError(msg)
 
 
 def dump_job(job: dict[str, Any] | None) -> str:
