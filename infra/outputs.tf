@@ -67,3 +67,23 @@ output "sqs_max_receive_count" {
   description = "Redrive maxReceiveCount for the work queue (see job-state-machine.md)."
   value       = var.sqs_max_receive_count
 }
+
+output "api_create_job_role_arn" {
+  description = "IAM role ARN for the create_job Lambda (DynamoDB PutItem + input-bucket presign PutObject)."
+  value       = aws_iam_role.api_create_job.arn
+}
+
+output "api_create_job_role_name" {
+  description = "IAM role name for the create_job Lambda."
+  value       = aws_iam_role.api_create_job.name
+}
+
+output "api_get_job_role_arn" {
+  description = "IAM role ARN for the get_job Lambda (DynamoDB GetItem only)."
+  value       = aws_iam_role.api_get_job.arn
+}
+
+output "api_get_job_role_name" {
+  description = "IAM role name for the get_job Lambda."
+  value       = aws_iam_role.api_get_job.name
+}

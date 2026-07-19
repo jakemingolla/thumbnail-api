@@ -28,6 +28,7 @@ When a ticket would change a contract (API, state, keys, queue shapes, invariant
 | SQS/queue message schema or semantics | `docs/specification/` |
 | Other behavior or invariants callers rely on | `docs/specification/` |
 | Deploy, verify, navigate, or operate commands/paths | `docs/agents/` |
+| Python lint/typing/test conventions for agents | `docs/agents/python.md` |
 | Onboarding, why/how-to-run for humans | `docs/human/` |
 
 If unsure which set: prefer `docs/specification/` for anything normative; `docs/agents/` for imperative how-to; `docs/human/` for skimmable orientation. See [`docs/README.md`](../README.md).
