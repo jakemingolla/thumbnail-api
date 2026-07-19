@@ -108,6 +108,21 @@ output "api_get_job_function_arn" {
   value       = aws_lambda_function.api_get_job.arn
 }
 
+output "api_id" {
+  description = "API Gateway REST API id (for LocalStack execute-api URL path)."
+  value       = aws_api_gateway_rest_api.jobs.id
+}
+
+output "api_stage_name" {
+  description = "Deployed API Gateway stage name."
+  value       = aws_api_gateway_stage.jobs.stage_name
+}
+
+output "api_base_url" {
+  description = "Host-facing jobs API base URL (LocalStack path-style execute-api). Append /jobs."
+  value       = local.api_base_url
+}
+
 output "dispatcher_role_arn" {
   description = "IAM role ARN for the dispatcher Lambda (SQS SendMessage + jobs UpdateItem/GetItem)."
   value       = aws_iam_role.dispatcher.arn
@@ -116,6 +131,21 @@ output "dispatcher_role_arn" {
 output "dispatcher_role_name" {
   description = "IAM role name for the dispatcher Lambda."
   value       = aws_iam_role.dispatcher.name
+}
+
+output "dispatcher_function_name" {
+  description = "Lambda function name for the S3 ObjectCreated dispatcher."
+  value       = aws_lambda_function.dispatcher.function_name
+}
+
+output "dispatcher_function_arn" {
+  description = "ARN of the S3 ObjectCreated dispatcher Lambda."
+  value       = aws_lambda_function.dispatcher.arn
+}
+
+output "thumbnail_sizes" {
+  description = "Configured thumbnail sizes (pixels) injected as THUMBNAIL_SIZES."
+  value       = var.thumbnail_sizes
 }
 
 output "worker_role_arn" {

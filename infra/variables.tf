@@ -132,6 +132,18 @@ variable "api_lambda_memory_size" {
   default     = 256
 }
 
+variable "dispatcher_lambda_timeout_seconds" {
+  description = "Timeout for the S3 → SQS dispatcher Lambda."
+  type        = number
+  default     = 30
+}
+
+variable "dispatcher_lambda_memory_size" {
+  description = "Memory (MB) for the S3 → SQS dispatcher Lambda."
+  type        = number
+  default     = 256
+}
+
 variable "worker_lambda_timeout_seconds" {
   description = "Timeout for the worker Lambda. Keep below sqs_visibility_timeout_seconds."
   type        = number
@@ -152,5 +164,16 @@ variable "thumbnail_sizes" {
   validation {
     condition     = length(var.thumbnail_sizes) > 0 && alltrue([for size in var.thumbnail_sizes : size > 0])
     error_message = "thumbnail_sizes must be a non-empty list of positive integers."
+  }
+}
+
+variable "api_stage_name" {
+  description = "API Gateway stage name (included in API_BASE). Default matches docs/specification/api.md LocalStack examples."
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = length(var.api_stage_name) > 0
+    error_message = "api_stage_name must be non-empty."
   }
 }

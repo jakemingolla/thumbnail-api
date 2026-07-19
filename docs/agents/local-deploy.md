@@ -30,8 +30,8 @@ just test-e2e
 What it does:
 
 1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
-2. Runs `just package` (Lambda zips as available).
-3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`.
+2. Runs `just package` (Lambda zips as available; host-native Linux wheels).
+3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`, passing `lambda_architectures` for the host (`arm64` on Apple Silicon, `x86_64` on CI/ubuntu) so it matches the zip.
 4. `uv run python -m pytest test/e2e/ -m e2e`.
 5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
 
@@ -41,7 +41,7 @@ Do not run bare `pytest test/e2e/` without the harness — env and apply will be
 
 ### CI (GitHub Actions)
 
-On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same smoke as local: LocalStack healthy + skeleton apply + outputs readable.
+On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same as local: LocalStack healthy + apply + outputs readable, plus feature scenarios under `test/e2e/` (e.g. jobs HTTP create → get).
 
 ## Endpoint
 
@@ -159,7 +159,55 @@ Env injected into both functions (see [Lambda / app environment variables](#lamb
 | `AWS_REGION` | `var.aws_region` |
 | `THUMBNAIL_SIZES` | `var.thumbnail_sizes` (default `128,256,512`) |
 
-HTTP routes are out of scope here (THUMB-017). For debugging, invoke the functions directly with API Gateway proxy-shaped events:
+### API Gateway (jobs HTTP)
+
+Terraform (`infra/api_gateway.tf`) exposes a REST API with Lambda proxy (`AWS_PROXY`):
+
+| Method | Path | Lambda |
+|--------|------|--------|
+| `POST` | `/jobs` | `thumbnail-api-create-job` |
+| `GET` | `/jobs/{job_id}` | `thumbnail-api-get-job` |
+
+Stage default: `dev` (`var.api_stage_name`). Image bytes never go through the gateway — clients upload via the presigned `upload_url` from `POST /jobs` (S3 / LocalStack S3).
+
+#### Obtain `API_BASE`
+
+After apply, prefer the Terraform output (uses this worktree’s `LOCALSTACK_ENDPOINT` edge port):
+
+```bash
+set -a && source .localstack.env && set +a
+export API_BASE="$(cd infra && terraform output -raw api_base_url)"
+# e.g. http://127.0.0.1:<edge-port>/_aws/execute-api/<apiId>/dev
+```
+
+Equivalent pattern from `apiId` + stage (matches [`docs/specification/api.md`](../specification/api.md)):
+
+```bash
+API_ID=$(cd infra && terraform output -raw api_id)
+STAGE=$(cd infra && terraform output -raw api_stage_name)
+export API_BASE="${LOCALSTACK_ENDPOINT}/_aws/execute-api/${API_ID}/${STAGE}"
+```
+
+Outputs: `api_id`, `api_stage_name`, `api_base_url`.
+
+#### HTTP smoke (create → get)
+
+```bash
+set -a && source .localstack.env && set +a
+export API_BASE="$(cd infra && terraform output -raw api_base_url)"
+
+RESP=$(curl -sS -X POST "$API_BASE/jobs" \
+  -H 'Content-Type: application/json' \
+  -d '{"content_type":"image/jpeg"}')
+echo "$RESP" | jq .
+JOB_ID=$(echo "$RESP" | jq -r .job_id)
+
+curl -sS "$API_BASE/jobs/$JOB_ID" | jq .
+```
+
+E2E covers the same slice (`test/e2e/test_jobs_api.py` via `just test-e2e`). Upload → pipeline assertions are later tickets.
+
+For debugging without HTTP, invoke the functions directly with API Gateway proxy-shaped events:
 
 ```bash
 set -a && source .localstack.env && set +a
@@ -185,15 +233,59 @@ aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
 cat /tmp/get-job-out.json
 ```
 
-Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — full upload flow is covered once API Gateway lands (THUMB-017).
+Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — covered when the full upload path lands in e2e/runbook tickets.
 
 ### Pipeline Lambda IAM roles
 
 Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
 
+### Dispatcher Lambda + S3 notification
+
+Terraform (`infra/lambda_pipeline.tf`) registers the dispatcher after `just package` has written `dist/lambda/pipeline.zip`. The input bucket notifies on `s3:ObjectCreated:*` with prefix `uploads/` (see `docs/specification/s3-keys.md`).
+
+| Function (default `name_prefix`) | Handler | Role | Outputs |
+|----------------------------------|---------|------|---------|
+| `thumbnail-dispatcher` | `thumbnail_api.handlers.dispatcher.handler` | `dispatcher` | `dispatcher_function_name`, `dispatcher_function_arn` |
+
+Same runtime/arch defaults as API Lambdas. Env matches the shared `Config` keys (including `QUEUE_URL` and `THUMBNAIL_SIZES`).
+
+Smoke without the HTTP API (seed via `create_job`, then PUT the original):
+
+```bash
+set -a && source .localstack.env && set +a
+CREATE_FN=$(cd infra && terraform output -raw api_create_job_function_name)
+BUCKET=$(cd infra && terraform output -raw input_bucket_name)
+QUEUE=$(cd infra && terraform output -raw work_queue_url)
+TABLE=$(cd infra && terraform output -raw jobs_table_name)
+
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" lambda invoke \
+  --function-name "$CREATE_FN" \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"body":"{\"content_type\":\"image/jpeg\"}","headers":{"content-type":"application/json"},"isBase64Encoded":false}' \
+  /tmp/create-job-out.json
+JOB_ID=$(python3 -c 'import json; r=json.load(open("/tmp/create-job-out.json")); print(json.loads(r["body"])["job_id"])')
+INPUT_KEY=$(python3 -c 'import json; r=json.load(open("/tmp/create-job-out.json")); print(json.loads(r["body"])["input_key"])')
+
+# ObjectCreated under uploads/ → dispatcher → N work messages (default sizes: 3)
+echo 'fake-jpeg' | aws --endpoint-url "$LOCALSTACK_ENDPOINT" s3 cp - "s3://${BUCKET}/${INPUT_KEY}" \
+  --content-type image/jpeg
+
+# expect: one MessageBody per configured size (job_id / input_key / size)
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs receive-message \
+  --queue-url "$QUEUE" --max-number-of-messages 10 --wait-time-seconds 10
+
+# expect: status processing
+aws --endpoint-url "$LOCALSTACK_ENDPOINT" dynamodb get-item \
+  --table-name "$TABLE" \
+  --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+  --consistent-read
+```
+
+If the queue is empty, wait a few seconds and receive again (LocalStack notification latency). Purge the work queue between smokes if leftover messages confuse counts: `aws --endpoint-url "$LOCALSTACK_ENDPOINT" sqs purge-queue --queue-url "$QUEUE"`.
+
 ### Worker Lambda + SQS trigger
 
-Terraform (`infra/lambda_pipeline.tf`) registers the worker after `just package` has written `dist/lambda/pipeline.zip` (Pillow included). An SQS event source mapping polls the work queue with **batch size 1**.
+Terraform (`infra/lambda_pipeline.tf`) also registers the worker (Pillow included in `pipeline.zip`). An SQS event source mapping polls the work queue with **batch size 1**.
 
 | Item (default `name_prefix`) | Value |
 |------------------------------|-------|
@@ -205,9 +297,9 @@ Terraform (`infra/lambda_pipeline.tf`) registers the worker after `just package`
 | Event source | work queue ARN, `batch_size = 1` |
 | Outputs | `worker_function_name`, `worker_function_arn`, `worker_event_source_mapping_uuid` |
 
-Env matches the API Lambdas (`local.api_lambda_environment`), including in-Lambda `AWS_ENDPOINT_URL`.
+Env matches `local.pipeline_lambda_environment` (same `Config` keys / in-Lambda `AWS_ENDPOINT_URL`).
 
-Dispatcher Lambda wiring remains a follow-on (THUMB-019). For a single-size debug invoke (synthetic SQS event):
+For a single-size debug invoke (synthetic SQS event):
 
 ```bash
 set -a && source .localstack.env && set +a
@@ -257,7 +349,7 @@ Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manua
 | API handlers (`create_job`, `get_job`) | `dist/lambda/api.zip` | `filename = "${path.module}/../dist/lambda/api.zip"` |
 | Pipeline handlers (`dispatcher`, `worker`) | `dist/lambda/pipeline.zip` | `filename = "${path.module}/../dist/lambda/pipeline.zip"` |
 
-Both zips currently share the same payload (`thumbnail_api` + runtime third-party deps including **Pillow** for the worker). Handler entrypoints differ per function (`thumbnail_api.handlers.worker.handler`, etc.). Split artifacts later if API vs pipeline deps diverge (dispatcher: THUMB-019).
+Both zips currently share the same payload (`thumbnail_api` + runtime third-party deps including **Pillow** for the worker). Handler entrypoints differ per function (`thumbnail_api.handlers.create_job.handler` / `get_job` / `dispatcher` / `worker`). Split artifacts later if API vs pipeline deps diverge.
 
 ### Native deps (Pillow)
 
@@ -314,7 +406,8 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
-| `infra/lambda_pipeline.tf` | worker Lambda + SQS event source mapping (batch size 1) |
+| `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
+| `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |
