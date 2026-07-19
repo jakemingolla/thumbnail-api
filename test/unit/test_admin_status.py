@@ -120,7 +120,7 @@ def test_format_report_watch_includes_sparklines(monkeypatch: pytest.MonkeyPatch
     assert "watch  every 2s · last 8 samples" in text
     assert "in-flight" in text
     assert any(ch in text for ch in "▁▂▃▄▅▆▇█")
-    assert "no sparkline" in text
+    assert "S3  thumbnail-input" in text
 
 
 class _FakeSqs:

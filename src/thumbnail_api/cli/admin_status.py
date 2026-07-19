@@ -440,8 +440,6 @@ def format_report(
         )
 
     lines.append("")
-    if history is not None:
-        lines.append(dim("S3  (snapshot each poll — count + total size; no sparkline)"))
     lines.extend(_bucket_lines(snapshot.input_bucket))
     lines.append("")
     lines.extend(_bucket_lines(snapshot.output_bucket))
