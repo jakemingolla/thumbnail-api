@@ -5,7 +5,7 @@ Normative contract for job and per-size status in DynamoDB. Implementers (create
 Related contracts (owned elsewhere):
 
 - HTTP shapes: `docs/specification/api.md` (THUMB-001)
-- S3 key layout: `docs/specification/s3-keys.md` (THUMB-003)
+- S3 key layout and thumbnail resize/encode policy: `docs/specification/s3-keys.md` (THUMB-003 / THUMB-018)
 - SQS message body and v1 size list: `docs/specification/sqs-messages.md` (THUMB-004)
 
 Status string values in DynamoDB and in the public API must match exactly (lowercase).
