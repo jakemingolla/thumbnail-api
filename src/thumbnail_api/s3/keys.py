@@ -1,5 +1,7 @@
 """S3 object key builders matching docs/specification/s3-keys.md."""
 
+from __future__ import annotations
+
 ALLOWED_UPLOAD_CONTENT_TYPES: frozenset[str] = frozenset(
     {
         "image/jpeg",
@@ -8,6 +10,9 @@ ALLOWED_UPLOAD_CONTENT_TYPES: frozenset[str] = frozenset(
     }
 )
 OUTPUT_CONTENT_TYPE = "image/jpeg"
+
+_INPUT_KEY_PREFIX = "uploads/"
+_INPUT_KEY_SUFFIX = "/original"
 
 
 def _validate_job_id(job_id: str) -> None:
@@ -34,7 +39,20 @@ def _validate_size(size: int) -> str:
 def build_input_key(job_id: str) -> str:
     """Return the input object key for a job: ``uploads/{job_id}/original``."""
     _validate_job_id(job_id)
-    return f"uploads/{job_id}/original"
+    return f"{_INPUT_KEY_PREFIX}{job_id}{_INPUT_KEY_SUFFIX}"
+
+
+def parse_input_key(key: str) -> str:
+    """Extract ``job_id`` from an input key, or raise ``ValueError`` if invalid.
+
+    Accepts only the normative pattern ``uploads/{job_id}/original``.
+    """
+    if not key.startswith(_INPUT_KEY_PREFIX) or not key.endswith(_INPUT_KEY_SUFFIX):
+        msg = "key must match uploads/{job_id}/original"
+        raise ValueError(msg)
+    job_id = key[len(_INPUT_KEY_PREFIX) : -len(_INPUT_KEY_SUFFIX)]
+    _validate_job_id(job_id)
+    return job_id
 
 
 def build_output_key(job_id: str, size: int) -> str:

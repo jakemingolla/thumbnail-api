@@ -7,6 +7,9 @@
 .localstack/
 .localstack-*/
 
+# Lambda packaging output (just package)
+dist/
+
 # Terraform (local state / LocalStack)
 infra/.terraform/
 infra/terraform.tfstate

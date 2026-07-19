@@ -62,3 +62,8 @@ swagger port="8090":
     cd docs/specification
     echo "Swagger UI: http://127.0.0.1:{{port}}/swagger.html"
     python3 -m http.server "{{port}}"
+
+# Build Lambda deployment zips (dist/lambda/api.zip + pipeline.zip)
+# Idempotent; targets Linux wheels for LocalStack. See docs/agents/local-deploy.md.
+package: uv
+    ./scripts/package-lambda.sh

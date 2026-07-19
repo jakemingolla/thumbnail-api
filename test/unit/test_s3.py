@@ -12,6 +12,7 @@ from thumbnail_api.s3 import (
     build_output_key,
     generate_presigned_put_url,
     get_input_object,
+    parse_input_key,
     put_output_object,
     validate_upload_content_type,
 )
@@ -41,6 +42,25 @@ def s3_config() -> Config:
 
 def test_build_input_key() -> None:
     assert build_input_key(_JOB_ID) == f"uploads/{_JOB_ID}/original"
+
+
+def test_parse_input_key() -> None:
+    assert parse_input_key(f"uploads/{_JOB_ID}/original") == _JOB_ID
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "",
+        "uploads//original",
+        "uploads/has/slash/original",
+        "thumbnails/x/128.jpg",
+        f"uploads/{_JOB_ID}/ORIGINAL",
+    ],
+)
+def test_parse_input_key_rejects_invalid(key: str) -> None:
+    with pytest.raises(ValueError, match=r"key must match|job_id"):
+        parse_input_key(key)
 
 
 def test_build_output_key() -> None:
