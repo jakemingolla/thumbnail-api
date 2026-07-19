@@ -154,6 +154,10 @@ cat /tmp/get-job-out.json
 
 Presigned `upload_url` hosts follow `AWS_ENDPOINT_URL` inside the function (`localhost.localstack.cloud:4566`). That is correct for in-Lambda AWS calls; uploading from the host against a non-default edge port may need URL rewriting or `LOCALSTACK_HOST` — full upload flow is covered once API Gateway lands (THUMB-017).
 
+### Pipeline Lambda IAM roles
+
+Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
+
 ## Lambda packaging
 
 Build deployable zip artifacts before Terraform creates Lambda functions (`filename`):
@@ -224,6 +228,7 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
+| `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
 | `dist/lambda/api.zip` | API Lambda zip (generated; gitignored) |

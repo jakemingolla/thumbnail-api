@@ -107,3 +107,23 @@ output "api_get_job_function_arn" {
   description = "ARN of the get_job Lambda."
   value       = aws_lambda_function.api_get_job.arn
 }
+
+output "dispatcher_role_arn" {
+  description = "IAM role ARN for the dispatcher Lambda (SQS SendMessage + jobs UpdateItem/GetItem)."
+  value       = aws_iam_role.dispatcher.arn
+}
+
+output "dispatcher_role_name" {
+  description = "IAM role name for the dispatcher Lambda."
+  value       = aws_iam_role.dispatcher.name
+}
+
+output "worker_role_arn" {
+  description = "IAM role ARN for the worker Lambda (SQS consume + input GetObject + output PutObject + jobs updates)."
+  value       = aws_iam_role.worker.arn
+}
+
+output "worker_role_name" {
+  description = "IAM role name for the worker Lambda."
+  value       = aws_iam_role.worker.name
+}
