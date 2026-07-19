@@ -18,11 +18,11 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 from thumbnail_api.jobs import get_job, put_pending_job
-from thumbnail_api.jobs.types import JobRecord
 from thumbnail_api.s3 import build_input_key
 
 if TYPE_CHECKING:
     from thumbnail_api.jobs.store import DynamoDBClient
+    from thumbnail_api.jobs.types import JobRecord
 
 _PATH_STYLE_S3 = BotoConfig(
     signature_version="s3v4",
