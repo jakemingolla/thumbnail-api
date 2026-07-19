@@ -6,4 +6,6 @@
 #   iam_pipeline.tf — IAM roles for dispatcher / worker Lambdas
 #   lambda_api.tf — create_job / get_job functions (dist/lambda/api.zip)
 #   lambda_pipeline.tf — dispatcher (+ S3 notification); worker: THUMB-022
-# Follow-on: API Gateway (THUMB-017), worker Lambda (THUMB-022).
+#   api_gateway.tf — REST API + AWS_PROXY routes for POST/GET /jobs
+# Follow-on: worker Lambda (THUMB-022).
+
