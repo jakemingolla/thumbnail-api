@@ -57,7 +57,9 @@ State is local (`infra/terraform.tfstate`, gitignored). Teardown deletes that st
 
 `s3_use_path_style = true` must stay enabled on the AWS provider. LocalStack + path-style is required so S3 presigned URLs resolve correctly. Do not switch to virtual-hosted-only S3 without updating clients and this note.
 
-Application boto3 S3 clients must also use path-style addressing (`addressing_style=path`) and `endpoint_url` from `AWS_ENDPOINT_URL` — see `src/thumbnail_api/config/clients.py`.
+Application boto3 S3 clients must also use path-style addressing (`addressing_style=path`), SigV4 (`signature_version=s3v4`), and `endpoint_url` from `AWS_ENDPOINT_URL` — see `src/thumbnail_api/config/clients.py`.
+
+Presigned upload URLs from `thumbnail_api.s3.generate_presigned_put_url` are path-style against that endpoint (e.g. `http://127.0.0.1:<port>/<bucket>/<key>?...`). Clients (`curl`, browsers) must use the returned URL as-is — do not rewrite to virtual-hosted style (`http://<bucket>.localhost:...`).
 
 ### Verify S3 buckets
 
@@ -98,6 +100,10 @@ aws --endpoint-url="$LOCALSTACK_ENDPOINT" sqs list-queues
 
 (`awslocal` is equivalent if installed; plain `aws` + `--endpoint-url` is enough.)
 
+### API Lambda IAM roles
+
+API Lambdas use distinct roles from the pipeline (`thumbnail-api-create-job`, `thumbnail-api-get-job` by default): DynamoDB create/get on the jobs table and input-bucket `PutObject` for presigned uploads only — no SQS or output-bucket write. Outputs: `api_create_job_role_arn`, `api_get_job_role_arn`.
+
 ### Pipeline Lambda IAM roles
 
 Dispatcher and worker use distinct roles from the API Lambdas (`thumbnail-dispatcher`, `thumbnail-worker` by default): SQS send vs consume, jobs table updates, and (worker only) input read / output write. Outputs: `dispatcher_role_arn`, `worker_role_arn`.
@@ -136,7 +142,9 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/s3.tf` | Input / output buckets + input-bucket CORS |
 | `infra/dynamodb.tf` | Jobs table (`job_id` partition key, on-demand) |
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
+| `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `infra/iam_pipeline.tf` | IAM roles for dispatcher / worker (not API) |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |
+| `src/thumbnail_api/s3/` | Key builders, path-style presigned PUT, worker get/put |
 | `.env.example` | Sample Lambda/app env var names for local runs |
 | `.localstack.env` | Generated instance env (gitignored; created by lifecycle) |

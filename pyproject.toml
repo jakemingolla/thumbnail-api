@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13.5"
 dependencies = [
     "boto3>=1.43.51",
+    "pillow>=12.3.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
 ]
