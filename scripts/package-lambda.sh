@@ -13,11 +13,13 @@ API_ZIP="${OUT_DIR}/api.zip"
 PIPELINE_ZIP="${OUT_DIR}/pipeline.zip"
 
 # Lambda runs Linux in Docker via LocalStack. Default to host arch (Apple Silicon → aarch64).
-# Override: LAMBDA_PYTHON_PLATFORM=x86_64-unknown-linux-gnu
+# Use manylinux_2_28 so native deps (Pillow) resolve to published wheels instead of sdists
+# (Pillow 12.x has no manylinux2014 / unknown-linux-gnu wheels for cp313).
+# Override: LAMBDA_PYTHON_PLATFORM=x86_64-manylinux_2_28
 default_platform() {
   case "$(uname -m)" in
-    arm64 | aarch64) echo "aarch64-unknown-linux-gnu" ;;
-    *) echo "x86_64-unknown-linux-gnu" ;;
+    arm64 | aarch64) echo "aarch64-manylinux_2_28" ;;
+    *) echo "x86_64-manylinux_2_28" ;;
   esac
 }
 
@@ -54,9 +56,11 @@ uv export \
   --output-file "${REQ_FILE}" \
   >/dev/null
 
+# Require wheels — do not compile native deps on the host (CI lacks jpeg headers).
 uv pip install \
   --no-installer-metadata \
   --no-compile-bytecode \
+  --only-binary :all: \
   --python-version "${PYTHON_VERSION}" \
   --python-platform "${PYTHON_PLATFORM}" \
   --target "${BUILD_DIR}" \

@@ -91,7 +91,19 @@ compose() {
 
 remove_path_if_exists() {
   local path="$1"
-  if [[ -e "${path}" ]]; then
-    rm -rf "${path}"
+  if [[ ! -e "${path}" ]]; then
+    return 0
   fi
+  if rm -rf "${path}" 2>/dev/null; then
+    return 0
+  fi
+  # LocalStack may write root-owned files into the bind-mounted volume dir.
+  if command -v docker >/dev/null 2>&1; then
+    local parent base
+    parent="$(cd "$(dirname "${path}")" && pwd)"
+    base="$(basename "${path}")"
+    docker run --rm -v "${parent}:/parent" alpine:3.20 \
+      rm -rf "/parent/${base}" >/dev/null 2>&1 || true
+  fi
+  rm -rf "${path}" 2>/dev/null || true
 }
