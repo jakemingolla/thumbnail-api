@@ -86,4 +86,5 @@ ignorelist = ["id", "input"]
 [tool.pytest.ini_options]
 markers = [
     "only: run only this test (used with just test-only)",
+    "e2e: LocalStack end-to-end (run via just test-e2e; not part of just test)",
 ]

@@ -8,7 +8,40 @@ Start/stop, isolation, and cleanup: [`dev-lifecycle.md`](dev-lifecycle.md).
 
 - Docker with Compose v2 (`docker compose version`)
 - Terraform `>= 1.5` (`terraform version`)
-- A running LocalStack instance for this worktree (`just localstack-up` — see [`dev-lifecycle.md`](dev-lifecycle.md))
+- A running LocalStack instance for this worktree (`just localstack-up` — see [`dev-lifecycle.md`](dev-lifecycle.md)) — **not** required before `just test-e2e` (the harness starts LocalStack itself)
+
+## E2E harness (LocalStack)
+
+Reusable Compose → package → Terraform apply → pytest gate. Feature tickets add scenarios under `test/e2e/`; do **not** invent a second harness.
+
+| Item | Value |
+|------|--------|
+| Recipe | `just test-e2e` |
+| Tests | `test/e2e/` (`pytest` marker `e2e`) |
+| CI job | `e2e` in `.github/workflows/e2e.yaml` (workflow name: `🧪 E2E (LocalStack)`) |
+| Fast suite | `just test` — unit + non-LocalStack integration only (no Docker) |
+
+### Local
+
+```bash
+just test-e2e
+```
+
+What it does:
+
+1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
+2. Runs `just package` (Lambda zips as available).
+3. `terraform init` + `terraform apply` in `infra/` against `LOCALSTACK_ENDPOINT`.
+4. `uv run python -m pytest test/e2e/ -m e2e`.
+5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
+
+Fixtures (see `test/e2e/conftest.py`): `localstack_endpoint`, `aws_credentials`, `terraform_outputs` (raw JSON), `tf_outputs` (name → value). Failures print endpoint / apply / fixture context.
+
+Do not run bare `pytest test/e2e/` without the harness — env and apply will be missing.
+
+### CI (GitHub Actions)
+
+On pull requests, job `e2e` runs on `ubuntu-latest` with Docker, Terraform (`hashicorp/setup-terraform`, wrapper off), `./.github/actions/setup`, then `just test-e2e`. Same smoke as local: LocalStack healthy + skeleton apply + outputs readable.
 
 ## Endpoint
 
@@ -174,6 +207,9 @@ Set `AWS_ENDPOINT_URL` to `LOCALSTACK_ENDPOINT` from `.localstack.env` when runn
 | `infra/sqs.tf` | Work queue + DLQ + redrive |
 | `infra/iam_api.tf` | IAM roles for create_job / get_job (not pipeline) |
 | `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
+| `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
+| `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |
+| `.github/workflows/e2e.yaml` | PR job `e2e` — Docker + LocalStack + `just test-e2e` |
 | `dist/lambda/api.zip` | API Lambda zip (generated; gitignored) |
 | `dist/lambda/pipeline.zip` | Pipeline Lambda zip (generated; gitignored) |
 | `src/thumbnail_api/config/` | Shared env config + LocalStack-aware boto3 clients |

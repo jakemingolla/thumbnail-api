@@ -17,12 +17,17 @@ install: uv
 test-unit:
     uv run python -m pytest test/unit/
 
-# Run integration tests
+# Run non-LocalStack integration tests
 test-integration:
     uv run python -m pytest test/integration/
 
-# Run all tests
+# Fast tests only (unit + non-LocalStack integration). LocalStack e2e: `just test-e2e`.
 test: test-unit test-integration
+
+# LocalStack e2e harness: Compose → package → terraform apply → pytest test/e2e/
+# Slow; requires Docker + Terraform. See docs/agents/local-deploy.md.
+test-e2e:
+    ./scripts/test-e2e.sh
 
 # Run tests with the 'only' marker
 test-only:
