@@ -47,7 +47,7 @@ Configured sizes for v1 are defined in `docs/specification/sqs-messages.md`. Eve
 | Actor | May change |
 |-------|------------|
 | Create-job handler | Create job item: overall `pending`, all sizes `pending`. Must not enqueue work. |
-| Dispatcher | Overall `pending` → `processing` after fan-out. Must not set size statuses to terminal. |
+| Dispatcher | Overall `pending` → `processing` after fan-out. Must not set size statuses to terminal. Must ignore S3 keys that are not input keys (`uploads/{job_id}/original`). |
 | Worker | Per-size `pending` → `processing` → `complete` or `failed`; then apply job rollup. |
 | Get-job handler | Read only. |
 
@@ -177,6 +177,7 @@ On a duplicate `ObjectCreated` for an input key the dispatcher already handled:
 2. It must not move a terminal job (`complete` / `failed`) back to `processing` or `pending`.
 3. Re-sending SQS messages for sizes that are still `pending` or `processing` is allowed (at-least-once). Re-sending for sizes already `complete` or `failed` is allowed only if workers treat those messages as no-ops (below).
 4. Overall `pending` → `processing` must remain safe under retries (condition expression / equivalent).
+5. When overall status is already terminal (`complete` / `failed`), the dispatcher must not enqueue another fan-out for that job (avoids unbounded duplicate work after success or failure).
 
 ### Duplicate SQS → worker
 

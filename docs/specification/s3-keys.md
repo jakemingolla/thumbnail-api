@@ -43,6 +43,7 @@ Rules:
 - Clients must upload the original image to that key (typically via HTTP `PUT` to the presigned URL).
 - The key has **no file extension**. Format is conveyed by `Content-Type`, not by the key.
 - Exactly one original object per `job_id` at this key. Overwrite semantics for a second upload to the same key are undefined unless stated by a later ticket.
+- The dispatcher must derive `job_id` by parsing this pattern (the segment between `uploads/` and `/original`). S3 `ObjectCreated` events whose keys do not match this pattern must be ignored — they must not enqueue work or mutate job status.
 
 Example:
 
