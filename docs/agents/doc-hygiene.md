@@ -41,6 +41,10 @@ If unsure which set: prefer `docs/specification/` for anything normative; `docs/
 - Update code/verify steps without updating the matching `docs/` set in the same change.
 - Put critical guidance only in IDE/vendor rule files — see [`ide-rules.md`](ide-rules.md).
 
+## E2E coverage (LocalStack harness)
+
+Feature PRs that change runtime behavior against LocalStack/AWS wiring **must** extend e2e when a scenario already exists under `test/e2e/`, or **add** a scenario when the harness can cover it (Compose → apply → pytest). Use `just test-e2e` / CI job `e2e`; do not create a second parallel harness. Details: [`local-deploy.md`](local-deploy.md).
+
 ## Definition of done (doc hygiene)
 
 Before calling a change done:
@@ -49,6 +53,7 @@ Before calling a change done:
 - [ ] Contract changes: `docs/specification/` updated before or with the implementation.
 - [ ] Deploy/verify/command changes: `docs/agents/` updated.
 - [ ] Human onboarding/run-flow changes: `docs/human/` updated.
+- [ ] Runtime behavior changes: e2e scenario extended or added under `test/e2e/` when the LocalStack harness can cover it (see above).
 - [ ] No normative rule exists only in a ticket or PR body.
 - [ ] No undocumented “temporary” behavior left for the next agent to rediscover.
 - [ ] Tone matches the audience in [`docs/README.md`](../README.md).
