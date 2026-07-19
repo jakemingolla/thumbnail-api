@@ -115,3 +115,16 @@ download-job job_id *args: uv
       set +a
     fi
     uv run python -m thumbnail_api.cli download-job "{{job_id}}" {{args}}
+
+# Local-stack admin snapshot: SQS depths, DynamoDB count, S3 counts/sizes
+# Optional: just admin-status --watch --interval 2
+admin-status *args: uv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .localstack.env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .localstack.env
+      set +a
+    fi
+    uv run python -m thumbnail_api.cli admin-status {{args}}
