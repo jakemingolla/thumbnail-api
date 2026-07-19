@@ -5,8 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/localstack.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/prereqs.sh"
 
 cd "${REPO_ROOT}"
+
+require_docker
 
 # Dummy credentials for LocalStack (aws CLI / SDKs). Matches infra/variables.tf defaults.
 write_aws_env_lines() {
@@ -46,6 +50,7 @@ if [[ -f "${LOCALSTACK_ENV_FILE}" ]]; then
     echo "  name:     ${LOCALSTACK_DOCKER_NAME}"
     echo "  endpoint: ${LOCALSTACK_ENDPOINT}"
     echo "  env file: ${LOCALSTACK_ENV_FILE}"
+    echo "  Next:     just package && just apply && just outputs"
     exit 0
   fi
   echo "Found stale ${LOCALSTACK_ENV_FILE}; recreating instance."
@@ -109,7 +114,7 @@ echo "  name:     ${LOCALSTACK_DOCKER_NAME}"
 echo "  endpoint: ${LOCALSTACK_ENDPOINT}"
 echo "  env file: ${LOCALSTACK_ENV_FILE}"
 echo
-echo "Terraform (from infra/):"
-echo "  terraform apply -auto-approve -var=\"localstack_endpoint=${LOCALSTACK_ENDPOINT}\""
+echo "Next: just package && just apply && just outputs"
+echo "  (or: just deploy)"
 echo
 echo "Shell tip: set -a && source .localstack.env && set +a"
