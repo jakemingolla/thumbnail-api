@@ -410,7 +410,9 @@ Build deployable zip artifacts before Terraform creates Lambda functions (`filen
 just package
 ```
 
-Idempotent: re-running replaces zips under `dist/lambda/` (gitignored). No manual cleanup.
+Incremental: deps under `dist/lambda/.deps` reinstall only when `uv.lock` / `--python-platform` / Python version change. `src/thumbnail_api` is always recopied when a zip is written. Bytecode from the Linux dep install is kept in the zip. If the payload hash matches the previous zips, rewrite is skipped (avoids Terraform replacing Lambdas → another cold start).
+
+No manual cleanup. `dist/` is gitignored.
 
 | Artifact | Path (from repo root) | Terraform use |
 |----------|----------------------|---------------|
@@ -477,7 +479,7 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
 | `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` / `upload-watch` / `download-job` / `admin-status` |
-| `scripts/package-lambda.sh` | `just package` — build `dist/lambda/*.zip` |
+| `scripts/package-lambda.sh` | `just package` — incremental `dist/lambda/*.zip` |
 | `scripts/terraform-apply.sh` | `just apply` — terraform init/apply vs LocalStack |
 | `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
 | `src/thumbnail_api/cli/` | `just upload-watch` / `just download-job` / `just admin-status` (`python -m thumbnail_api.cli`) |
