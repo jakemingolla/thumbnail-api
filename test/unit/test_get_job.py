@@ -6,17 +6,23 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+import pytest
+
+from thumbnail_api.handlers import get_job as get_job_module
 from thumbnail_api.handlers.get_job import handle_get_job, handler
 from thumbnail_api.jobs.serde import to_item
 
 if TYPE_CHECKING:
-    import pytest
-
     from thumbnail_api.jobs.types import JobRecord
 
 _TABLE = "jobs"
 _JOB_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 _OTHER_JOB_ID = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+
+
+@pytest.fixture(autouse=True)
+def reset_handler_runtime() -> None:
+    get_job_module.reset_handler_runtime()
 
 
 def _job_record(**overrides: object) -> JobRecord:

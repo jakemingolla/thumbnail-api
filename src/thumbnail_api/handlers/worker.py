@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from botocore.exceptions import ClientError
 
 from thumbnail_api.config import get_config, get_dynamodb_client, get_s3_client
+from thumbnail_api.handlers.runtime import RuntimeCache
 from thumbnail_api.images import ImageProcessingError, resize_to_jpeg
 from thumbnail_api.jobs import (
     TERMINAL_SIZE_STATUSES,
@@ -40,6 +41,13 @@ logger = logging.getLogger(__name__)
 
 # Must match docs/specification/job-state-machine.md and var.sqs_max_receive_count.
 DEFAULT_MAX_RECEIVE_COUNT = 5
+
+_runtime: RuntimeCache[tuple[Config, BaseClient, DynamoDBClient]] = RuntimeCache()
+
+
+def reset_handler_runtime() -> None:
+    """Clear cached Config/clients so tests can monkeypatch factories."""
+    _runtime.reset()
 
 _PERMANENT_S3_ERROR_CODES = frozenset(
     {
@@ -327,12 +335,21 @@ def handle_worker(
     return {"ok": True}
 
 
+def _load_runtime() -> tuple[Config, BaseClient, DynamoDBClient]:
+    config = get_config(env_file=None)
+    return (
+        config,
+        get_s3_client(config),
+        cast("DynamoDBClient", get_dynamodb_client(config)),
+    )
+
+
 def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
     """Lambda entrypoint for SQS → thumbnail worker."""
-    config = get_config(env_file=None)
+    config, s3_client, dynamodb_client = _runtime.get(_load_runtime)
     return handle_worker(
         event,
         config=config,
-        s3_client=get_s3_client(config),
-        dynamodb_client=cast("DynamoDBClient", get_dynamodb_client(config)),
+        s3_client=s3_client,
+        dynamodb_client=dynamodb_client,
     )
