@@ -134,3 +134,15 @@ admin-status *args: uv
       set +a
     fi
     uv run python -m thumbnail_api.cli admin-status {{args}}
+
+# Time POST / PUT / poll-to-complete (needs prior apply). Example: just bench --json
+bench *args: uv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .localstack.env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .localstack.env
+      set +a
+    fi
+    uv run python -m thumbnail_api.cli bench {{args}}

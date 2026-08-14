@@ -7,17 +7,26 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
-from urllib.parse import urlparse, urlunparse
+from typing import Any
+from urllib.parse import urlparse
 
 from thumbnail_api.cli.local import (
+    HTTP_CREATED,
+    HTTP_OK,
+    PUT_SUCCESS_STATUSES,
+    SUFFIX_TO_CONTENT_TYPE,
+    TERMINAL_JOB_STATUSES,
     CliError,
+    content_type_for_path,
     dump_job,
     http_json,
     http_put,
+    job_is_fully_terminal,
+    job_size_statuses,
     require_str,
     resolve_api_base,
     resolve_localstack_endpoint,
+    rewrite_upload_url,
 )
 from thumbnail_api.cli.style import (
     bold,
@@ -35,23 +44,11 @@ from thumbnail_api.cli.style import (
     yellow,
 )
 
-_TERMINAL_STATUSES = frozenset({"complete", "failed"})
 _DEFAULT_TIMEOUT_SECONDS = 120.0
-_DEFAULT_POLL_INTERVAL_SECONDS = 1.0
-_HTTP_OK = 200
-_HTTP_CREATED = 201
-_HTTP_NO_CONTENT = 204
-_PUT_SUCCESS_STATUSES = frozenset({_HTTP_OK, _HTTP_NO_CONTENT})
+_DEFAULT_POLL_INTERVAL_SECONDS = 0.2
 _SPINNER_FRAMES = ("|", "/", "-", "\\")
 _SIZE_BAR_WIDTH = 12
 _PROCESSING_BLOCK_WIDTH = 3
-
-_SUFFIX_TO_CONTENT_TYPE: dict[str, str] = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-}
 
 
 @dataclass(frozen=True)
@@ -63,69 +60,13 @@ class _ProgressState:
     frame: int
 
 
-def _content_type_for_path(path: Path, override: str | None) -> str:
-    if override is not None:
-        return override
-    content_type = _SUFFIX_TO_CONTENT_TYPE.get(path.suffix.lower())
-    if content_type is None:
-        allowed = ", ".join(sorted(_SUFFIX_TO_CONTENT_TYPE))
-        msg = (
-            f"cannot infer content_type from extension {path.suffix!r}; "
-            f"use --content-type (allowed suffixes: {allowed})"
-        )
-        raise CliError(msg)
-    return content_type
-
-
 def _host_reachable_upload_url(upload_url: str, localstack_endpoint: str) -> str:
-    """Rewrite in-Lambda LocalStack edge host to the host-reachable endpoint."""
-    parsed = urlparse(upload_url)
-    endpoint = urlparse(localstack_endpoint)
-    if not endpoint.netloc:
-        msg = f"LOCALSTACK_ENDPOINT has no netloc: {localstack_endpoint!r}"
-        raise CliError(msg)
-    if parsed.netloc == endpoint.netloc:
-        return upload_url
-    rewritten = urlunparse(
-        parsed._replace(scheme=endpoint.scheme or "http", netloc=endpoint.netloc)
-    )
-    print(kv("rewrite", f"{dim(parsed.netloc)} → {cyan(endpoint.netloc)}"))
+    rewritten = rewrite_upload_url(upload_url, localstack_endpoint)
+    if rewritten != upload_url:
+        parsed = urlparse(upload_url)
+        endpoint = urlparse(localstack_endpoint)
+        print(kv("rewrite", f"{dim(parsed.netloc)} → {cyan(endpoint.netloc)}"))
     return rewritten
-
-
-def _size_statuses(job: dict[str, Any]) -> dict[str, str]:
-    sizes_raw = job.get("sizes")
-    if not isinstance(sizes_raw, dict):
-        return {}
-    sizes = cast("dict[str, Any]", sizes_raw)
-    out: dict[str, str] = {}
-    for key, entry in sizes.items():
-        label = str(key)
-        if isinstance(entry, dict):
-            entry_map = cast("dict[str, Any]", entry)
-            status = entry_map.get("status")
-            if isinstance(status, str):
-                out[label] = status
-            elif status is None:
-                out[label] = "?"
-            else:
-                out[label] = repr(status)
-        else:
-            out[label] = "?"
-    return out
-
-
-def _all_sizes_terminal(size_statuses: dict[str, str]) -> bool:
-    if not size_statuses:
-        return False
-    return all(status in _TERMINAL_STATUSES for status in size_statuses.values())
-
-
-def _is_fully_terminal(job: dict[str, Any]) -> bool:
-    overall = job.get("status")
-    if overall not in _TERMINAL_STATUSES:
-        return False
-    return _all_sizes_terminal(_size_statuses(job))
 
 
 def _size_bar(status: str, *, frame: int) -> str:
@@ -152,7 +93,7 @@ def _size_bar(status: str, *, frame: int) -> str:
 
 
 def _format_progress_lines(state: _ProgressState) -> list[str]:
-    done = sum(1 for status in state.size_statuses.values() if status in _TERMINAL_STATUSES)
+    done = sum(1 for status in state.size_statuses.values() if status in TERMINAL_JOB_STATUSES)
     total = len(state.size_statuses)
     header = (
         f"  {cyan(state.spinner)} {bold('watching')}  "
@@ -224,11 +165,11 @@ def _poll_until_terminal(
         status_code, job = http_json("GET", f"{api_base}/jobs/{job_id}")
         last_http = status_code
         last = job
-        if status_code != _HTTP_OK:
+        if status_code != HTTP_OK:
             msg = f"GET /jobs/{job_id} returned HTTP {status_code}:\n{dump_job(job)}"
             raise CliError(msg)
 
-        size_statuses = _size_statuses(job)
+        size_statuses = job_size_statuses(job)
         overall = job.get("status")
         signature = (overall, tuple(sorted(size_statuses.items())))
         spinner = _SPINNER_FRAMES[spin_idx % len(_SPINNER_FRAMES)]
@@ -247,7 +188,7 @@ def _poll_until_terminal(
             last_signature = signature
         spin_idx += 1
 
-        if _is_fully_terminal(job):
+        if job_is_fully_terminal(job):
             return job
 
         time.sleep(interval_seconds)
@@ -289,7 +230,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--content-type",
         default=None,
-        choices=sorted(set(_SUFFIX_TO_CONTENT_TYPE.values())),
+        choices=sorted(set(SUFFIX_TO_CONTENT_TYPE.values())),
         help="Override Content-Type (default: infer from image extension)",
     )
     parser.add_argument(
@@ -324,7 +265,7 @@ def _validate_args(args: argparse.Namespace) -> tuple[Path, str, str, str]:
         msg = f"--interval must be positive, got {args.interval}"
         raise CliError(msg)
 
-    content_type = _content_type_for_path(image_path, args.content_type)
+    content_type = content_type_for_path(image_path, args.content_type)
     api_base = resolve_api_base(args.api_base)
     localstack_endpoint = resolve_localstack_endpoint(args.localstack_endpoint)
     return image_path, content_type, api_base, localstack_endpoint
@@ -347,8 +288,8 @@ def _create_and_upload(
         f"{api_base}/jobs",
         body={"content_type": content_type},
     )
-    if create_status != _HTTP_CREATED:
-        msg = f"POST /jobs expected {_HTTP_CREATED}, got {create_status}:\n{dump_job(created)}"
+    if create_status != HTTP_CREATED:
+        msg = f"POST /jobs expected {HTTP_CREATED}, got {create_status}:\n{dump_job(created)}"
         raise CliError(msg)
 
     job_id = require_str(created.get("job_id"), field="job_id", context=created)
@@ -361,7 +302,7 @@ def _create_and_upload(
     put_url = _host_reachable_upload_url(upload_url, localstack_endpoint)
     image_bytes = image_path.read_bytes()
     put_status = http_put(put_url, body=image_bytes, content_type=content_type)
-    if put_status not in _PUT_SUCCESS_STATUSES:
+    if put_status not in PUT_SUCCESS_STATUSES:
         msg = f"presigned PUT expected 200/204, got {put_status} (url={put_url})"
         raise CliError(msg)
     print(
@@ -374,7 +315,7 @@ def _create_and_upload(
 
 def _report_outcome(job_id: str, job: dict[str, Any], *, verbose: bool) -> int:
     overall = job.get("status")
-    size_statuses = _size_statuses(job)
+    size_statuses = job_size_statuses(job)
     print()
     if overall == "complete" and all(status == "complete" for status in size_statuses.values()):
         print(f"  {green('✓')} {bold('complete')}  {job_id}")

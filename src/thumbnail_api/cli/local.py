@@ -6,14 +6,31 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse, urlunparse
 
 
 class CliError(Exception):
     """User-facing CLI failure (exit non-zero)."""
+
+
+HTTP_OK = 200
+HTTP_CREATED = 201
+HTTP_NO_CONTENT = 204
+HTTP_BAD_REQUEST = 400
+PUT_SUCCESS_STATUSES = frozenset({HTTP_OK, HTTP_NO_CONTENT})
+TERMINAL_JOB_STATUSES = frozenset({"complete", "failed"})
+
+SUFFIX_TO_CONTENT_TYPE: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
 
 
 def repo_root() -> Path:
@@ -128,10 +145,6 @@ def aws_region() -> str:
     return os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
 
 
-_HTTP_OK = 200
-_HTTP_BAD_REQUEST = 400
-
-
 def ensure_localstack_healthy(endpoint: str, *, timeout: float = 3.0) -> None:
     """Fail clearly when the LocalStack edge is down or unreachable."""
     url = f"{endpoint.rstrip('/')}/_localstack/health"
@@ -153,7 +166,7 @@ def ensure_localstack_healthy(endpoint: str, *, timeout: float = 3.0) -> None:
             f'  Health: curl -sf "{endpoint}/_localstack/health" | jq .'
         )
         raise CliError(msg) from exc
-    if status < _HTTP_OK or status >= _HTTP_BAD_REQUEST:
+    if status < HTTP_OK or status >= HTTP_BAD_REQUEST:
         msg = (
             f"LocalStack health check failed status={status} at {endpoint}\n"
             "  Start or recreate: just localstack-up"
@@ -242,3 +255,91 @@ def require_str(value: object, *, field: str, context: object) -> str:
         msg = f"missing or empty {field}: {context}"
         raise CliError(msg)
     return value
+
+
+def content_type_for_path(path: Path, override: str | None) -> str:
+    if override is not None:
+        return override
+    content_type = SUFFIX_TO_CONTENT_TYPE.get(path.suffix.lower())
+    if content_type is None:
+        allowed = ", ".join(sorted(SUFFIX_TO_CONTENT_TYPE))
+        msg = (
+            f"cannot infer content_type from extension {path.suffix!r}; "
+            f"use --content-type (allowed suffixes: {allowed})"
+        )
+        raise CliError(msg)
+    return content_type
+
+
+def rewrite_upload_url(upload_url: str, localstack_endpoint: str) -> str:
+    """Rewrite in-Lambda LocalStack edge host to the host-reachable endpoint."""
+    parsed = urlparse(upload_url)
+    endpoint = urlparse(localstack_endpoint)
+    if not endpoint.netloc:
+        msg = f"LOCALSTACK_ENDPOINT has no netloc: {localstack_endpoint!r}"
+        raise CliError(msg)
+    if parsed.netloc == endpoint.netloc:
+        return upload_url
+    return urlunparse(parsed._replace(scheme=endpoint.scheme or "http", netloc=endpoint.netloc))
+
+
+def job_size_statuses(job: dict[str, Any]) -> dict[str, str]:
+    sizes_raw = job.get("sizes")
+    if not isinstance(sizes_raw, dict):
+        return {}
+    sizes = cast("dict[str, Any]", sizes_raw)
+    out: dict[str, str] = {}
+    for key, entry in sizes.items():
+        label = str(key)
+        if isinstance(entry, dict):
+            entry_map = cast("dict[str, Any]", entry)
+            status = entry_map.get("status")
+            if isinstance(status, str):
+                out[label] = status
+            elif status is None:
+                out[label] = "?"
+            else:
+                out[label] = repr(status)
+        else:
+            out[label] = "?"
+    return out
+
+
+def job_is_fully_terminal(job: dict[str, Any]) -> bool:
+    overall = job.get("status")
+    if overall not in TERMINAL_JOB_STATUSES:
+        return False
+    size_statuses = job_size_statuses(job)
+    if not size_statuses:
+        return False
+    return all(status in TERMINAL_JOB_STATUSES for status in size_statuses.values())
+
+
+def poll_job_until_terminal(
+    *,
+    api_base: str,
+    job_id: str,
+    timeout_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    """GET /jobs/{id} until overall + every size are terminal (no progress UI)."""
+    deadline = time.monotonic() + timeout_seconds
+    last: dict[str, Any] | None = None
+    last_http: int | None = None
+    while time.monotonic() < deadline:
+        status_code, job = http_json("GET", f"{api_base}/jobs/{job_id}")
+        last_http = status_code
+        last = job
+        if status_code != HTTP_OK:
+            msg = f"GET /jobs/{job_id} returned HTTP {status_code}:\n{dump_job(job)}"
+            raise CliError(msg)
+        if job_is_fully_terminal(job):
+            return job
+        time.sleep(interval_seconds)
+
+    msg = (
+        f"timeout: job {job_id} did not reach a terminal status for all sizes "
+        f"within {timeout_seconds:g}s (api_base={api_base}, last_http={last_http}).\n"
+        f"Last GET /jobs/{{id}} body:\n{dump_job(last)}"
+    )
+    raise CliError(msg)

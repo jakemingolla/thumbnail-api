@@ -31,7 +31,7 @@ _PATH_STYLE_S3 = BotoConfig(
 
 # LocalStack S3 → Lambda notification can take a few seconds.
 _POLL_TIMEOUT_SECONDS = 45.0
-_POLL_INTERVAL_SECONDS = 1.0
+_POLL_INTERVAL_SECONDS = 0.2
 
 _PURGE_IN_PROGRESS = "AWS.SimpleQueueService.PurgeQueueInProgress"
 

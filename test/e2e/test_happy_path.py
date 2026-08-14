@@ -23,7 +23,7 @@ from PIL import Image
 
 _TERMINAL_STATUSES = frozenset({"complete", "failed"})
 _POLL_TIMEOUT_SECONDS = 120.0
-_POLL_INTERVAL_SECONDS = 1.0
+_POLL_INTERVAL_SECONDS = 0.2
 _CONTENT_TYPE = "image/jpeg"
 
 _PATH_STYLE_S3 = BotoConfig(

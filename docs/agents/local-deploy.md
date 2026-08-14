@@ -29,6 +29,7 @@ just deploy          # localstack-up → package → apply (warmup) → outputs
 | `just warmup` | prior apply (tfstate + healthy edge) | `.localstack.env`, missing state, `terraform` / `uv` |
 | `just outputs` | prior apply (local `infra/terraform.tfstate`) | `terraform`, missing state |
 | `just deploy` | same as up + package + apply + outputs | same as each step |
+| `just bench` | prior apply; `$API_BASE` or tfstate | missing `API_BASE` / state; non-zero if a timed run is not `complete` |
 | `just upload-watch <image>` | prior apply; `$API_BASE` or tfstate | missing image / `API_BASE` / state; non-zero on fail/timeout |
 | `just download-job <job_id>` | prior apply; complete sizes on the job | missing job / no complete sizes / S3 get failure |
 | `just admin-status` | healthy LocalStack + prior apply (tfstate / env) | edge down, missing queues/table/buckets, missing state |
@@ -268,6 +269,13 @@ export API_BASE="$(cd infra && terraform output -raw api_base_url)"
 just upload-watch ./path/to/photo.jpg
 # Uses $API_BASE / $LOCALSTACK_ENDPOINT when set; otherwise terraform outputs.
 # Optional flags: just upload-watch ./path/to/photo.jpg --timeout 180 --verbose
+# Default poll interval is 0.2s (`--interval`).
+
+# Latency: POST / PUT / poll-to-complete (synthetic 1280x720 JPEG if no path)
+just bench
+just bench ./path/to/photo.jpg --runs 5 --warmup 1
+just bench --json --label after-esm
+# Default poll interval is 0.05s so timings are not quantized to the watch interval.
 
 # Follow-up: GET /jobs/{id}, then pull each complete size from LocalStack S3 → {n}.jpg
 just download-job "$JOB_ID"
@@ -492,12 +500,12 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
-| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `warmup` / `outputs` / `deploy` / `upload-watch` / `download-job` / `admin-status` |
+| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `warmup` / `outputs` / `deploy` / `bench` / `upload-watch` / `download-job` / `admin-status` |
 | `scripts/package-lambda.sh` | `just package` — incremental `dist/lambda/*.zip` |
 | `scripts/terraform-apply.sh` | terraform init/apply vs LocalStack (`just apply` then runs warmup) |
 | `scripts/warmup-lambdas.sh` | `just warmup` — dummy-invoke the four Lambdas (failures ignored) |
 | `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
-| `src/thumbnail_api/cli/` | `just upload-watch` / `just download-job` / `just admin-status` (`python -m thumbnail_api.cli`) |
+| `src/thumbnail_api/cli/` | `just bench` / `just upload-watch` / `just download-job` / `just admin-status` (`python -m thumbnail_api.cli`) |
 | `scripts/lib/prereqs.sh` | Shared Docker / terraform prerequisite checks |
 | `scripts/test-e2e.sh` | `just test-e2e` — LocalStack e2e harness orchestration |
 | `test/e2e/` | E2E scenarios + fixtures (`conftest.py`); extend here |
