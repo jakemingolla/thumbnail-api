@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
 from thumbnail_api.config.clients import get_dynamodb_client
 from thumbnail_api.config.main import get_config
-from thumbnail_api.handlers.http import error_response, json_response
+from thumbnail_api.http import error_response, json_response
 from thumbnail_api.jobs.store import get_job
 
 if TYPE_CHECKING:
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
 
     from thumbnail_api.jobs.store import DynamoDBClient
     from thumbnail_api.jobs.types import JobRecord, SizeState
+
+logger = logging.getLogger(__name__)
 
 
 def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
@@ -26,7 +29,8 @@ def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
             client=cast("DynamoDBClient", get_dynamodb_client(config)),
             table_name=config.jobs_table,
         )
-    except Exception:  # noqa: BLE001 - API contract: unexpected failures → JSON 500
+    except Exception:
+        logger.exception("get_job handler failed")
         return error_response(500, "internal_error", "Unexpected error")
 
 
