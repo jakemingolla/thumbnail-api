@@ -114,7 +114,7 @@ Overall status is a pure function of per-size statuses once the job has left `pe
 2. Else if **every** configured size is `complete` → overall must be `complete`.
 3. Else → overall must remain `processing` (mix of `pending` / `processing` / `complete`, with no `failed`).
 
-While overall is still `pending`, size statuses must all remain `pending` (workers must not run before dispatcher fan-out for that job). Rollup rules (1)–(3) apply after the dispatcher has moved the job to `processing`.
+While overall is still `pending`, size statuses must all remain `pending` (workers that observe overall `pending` must treat it as transient and retry — they must not claim). Rollup rules (1)–(3) apply after the dispatcher has moved the job to `processing`.
 
 After each size terminal update (`complete` or `failed`), the writer must recompute and persist overall status according to the rules above in the same logical update (single DynamoDB request preferred; if multiple requests are used, the size update must land before a subsequent rollup read observes a stale size map).
 

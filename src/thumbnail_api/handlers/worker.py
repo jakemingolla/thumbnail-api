@@ -55,6 +55,10 @@ class MalformedMessageError(ValueError):
     """SQS body failed schema validation; do not update DynamoDB or acknowledge."""
 
 
+class JobPendingError(Exception):
+    """Overall job is still ``pending``; retry without claiming the size."""
+
+
 class WorkMessage(NamedTuple):
     """Validated work-queue body fields."""
 
@@ -183,6 +187,9 @@ def _process_size(
     if job is None:
         msg = f"job not found: {message.job_id}"
         raise JobNotFoundError(msg)
+    if job["status"] == "pending":
+        msg = f"job still pending: {message.job_id}"
+        raise JobPendingError(msg)
 
     current = _size_status(job, message.size)
     if current in TERMINAL_SIZE_STATUSES:
