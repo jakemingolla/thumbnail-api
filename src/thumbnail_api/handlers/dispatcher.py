@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 from urllib.parse import unquote_plus
 
 from thumbnail_api.config import get_config, get_dynamodb_client, get_sqs_client
+from thumbnail_api.handlers.runtime import RuntimeCache
 from thumbnail_api.jobs import (
     TERMINAL_JOB_STATUSES,
     JobNotFoundError,
@@ -41,6 +42,14 @@ class SQSClient(Protocol):
     def send_message_batch(self, **kwargs: object) -> dict[str, Any]:
         """SendMessageBatch."""
         ...
+
+
+_runtime: RuntimeCache[tuple[Config, SQSClient, DynamoDBClient]] = RuntimeCache()
+
+
+def reset_handler_runtime() -> None:
+    """Clear cached Config/clients so tests can monkeypatch factories."""
+    _runtime.reset()
 
 
 class SQSBatchSendError(RuntimeError):
@@ -178,12 +187,21 @@ def handle_dispatcher(
     return {"ok": True}
 
 
+def _load_runtime() -> tuple[Config, SQSClient, DynamoDBClient]:
+    config = get_config(env_file=None)
+    return (
+        config,
+        cast("SQSClient", get_sqs_client(config)),
+        cast("DynamoDBClient", get_dynamodb_client(config)),
+    )
+
+
 def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
     """Lambda entrypoint for S3 ObjectCreated → SQS fan-out."""
-    config = get_config(env_file=None)
+    config, sqs_client, dynamodb_client = _runtime.get(_load_runtime)
     return handle_dispatcher(
         event,
         config=config,
-        sqs_client=cast("SQSClient", get_sqs_client(config)),
-        dynamodb_client=cast("DynamoDBClient", get_dynamodb_client(config)),
+        sqs_client=sqs_client,
+        dynamodb_client=dynamodb_client,
     )
