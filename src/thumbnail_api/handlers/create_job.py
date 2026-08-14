@@ -12,6 +12,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, cast
 
 from thumbnail_api.config import get_config, get_dynamodb_client, get_s3_client
+from thumbnail_api.handlers.runtime import RuntimeCache
 from thumbnail_api.http import error_response, json_response
 from thumbnail_api.jobs import put_pending_job
 from thumbnail_api.s3 import (
@@ -27,6 +28,14 @@ if TYPE_CHECKING:
     from thumbnail_api.jobs.store import DynamoDBClient
 
 logger = logging.getLogger(__name__)
+
+_runtime: RuntimeCache[tuple[Config, BaseClient, DynamoDBClient]] = RuntimeCache()
+
+
+def reset_handler_runtime() -> None:
+    """Clear cached Config/clients so tests can monkeypatch factories."""
+    _runtime.reset()
+
 
 _ALLOWED_CONTENT_TYPES_MESSAGE = "content_type must be one of " + ", ".join(
     sorted(ALLOWED_UPLOAD_CONTENT_TYPES)
@@ -199,15 +208,24 @@ def handle_create_job(
     )
 
 
+def _load_runtime() -> tuple[Config, BaseClient, DynamoDBClient]:
+    config = get_config(env_file=None)
+    return (
+        config,
+        get_s3_client(config),
+        cast("DynamoDBClient", get_dynamodb_client(config)),
+    )
+
+
 def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
     """Handle API Gateway Lambda proxy events for ``POST /jobs``."""
     try:
-        config = get_config(env_file=None)
+        config, s3_client, dynamodb_client = _runtime.get(_load_runtime)
         return handle_create_job(
             event,
             config=config,
-            s3_client=get_s3_client(config),
-            dynamodb_client=cast("DynamoDBClient", get_dynamodb_client(config)),
+            s3_client=s3_client,
+            dynamodb_client=dynamodb_client,
         )
     except Exception:
         logger.exception("create_job handler failed before request handling")

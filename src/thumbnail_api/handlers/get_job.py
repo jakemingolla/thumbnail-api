@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from thumbnail_api.config.clients import get_dynamodb_client
 from thumbnail_api.config.main import get_config
+from thumbnail_api.handlers.runtime import RuntimeCache
 from thumbnail_api.http import error_response, json_response
 from thumbnail_api.jobs.store import get_job
 
@@ -19,15 +20,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_runtime: RuntimeCache[tuple[DynamoDBClient, str]] = RuntimeCache()
+
+
+def reset_handler_runtime() -> None:
+    """Clear cached Config/clients so tests can monkeypatch factories."""
+    _runtime.reset()
+
+
+def _load_runtime() -> tuple[DynamoDBClient, str]:
+    config = get_config(env_file=None)
+    return cast("DynamoDBClient", get_dynamodb_client(config)), config.jobs_table
+
 
 def handler(event: dict[str, Any], _context: object) -> dict[str, Any]:
     """Lambda entrypoint: load config, read the job, return an API Gateway response."""
     try:
-        config = get_config(env_file=None)
+        client, table_name = _runtime.get(_load_runtime)
         return handle_get_job(
             event,
-            client=cast("DynamoDBClient", get_dynamodb_client(config)),
-            table_name=config.jobs_table,
+            client=client,
+            table_name=table_name,
         )
     except Exception:
         logger.exception("get_job handler failed")

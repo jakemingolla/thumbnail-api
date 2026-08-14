@@ -40,6 +40,11 @@ _OUTPUT_KEY = build_output_key(_JOB_ID, _SIZE)
 _NOW = "2026-07-18T22:00:00.000Z"
 
 
+@pytest.fixture(autouse=True)
+def reset_handler_runtime() -> None:
+    worker_module.reset_handler_runtime()
+
+
 @pytest.fixture
 def config() -> Config:
     return Config(
