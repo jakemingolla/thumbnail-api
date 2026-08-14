@@ -28,10 +28,12 @@ That one-shot recipe starts LocalStack (Compose), builds Lambda zips, applies Te
 
 ```bash
 just localstack-up   # allocate ports/names for this checkout, start, wait healthy
-just package         # Lambda zips → dist/lambda/
+just package         # Lambda zips → dist/lambda/ (skips zip rewrite if payload unchanged)
 just apply           # terraform init + apply against LocalStack
 just outputs         # print API_BASE and other key outputs
 ```
+
+`just package` reinstalls Linux wheels only when `uv.lock` / platform / Python version change. Unchanged payload skips rewriting the zips so Terraform does not replace the functions (another cold start).
 
 Each checkout gets its own LocalStack ports and names (safe if you have multiple worktrees). After `localstack-up`, load the generated env when you need the edge URL or AWS CLI against LocalStack:
 
