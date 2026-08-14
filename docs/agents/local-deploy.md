@@ -11,14 +11,14 @@ Ordered deploy loop — do not invent flags. From a clean checkout (after `just 
 ```bash
 just localstack-up   # Compose: allocate ports/names, start, wait healthy
 just package         # Lambda zips → dist/lambda/{api,pipeline}.zip
-just apply           # terraform init + apply against LOCALSTACK_ENDPOINT
+just apply           # terraform init + apply, then just warmup
 just outputs         # print API_BASE + key outputs
 ```
 
 One-shot equivalent:
 
 ```bash
-just deploy          # localstack-up → package → apply → outputs
+just deploy          # localstack-up → package → apply (warmup) → outputs
 ```
 
 | Recipe | Requires | Fails clearly if missing |
@@ -26,8 +26,9 @@ just deploy          # localstack-up → package → apply → outputs
 | `just localstack-up` | Docker Compose v2 + daemon | `docker` / Compose / daemon |
 | `just package` | `uv`, `zip` | `uv` (hint: `just install`), `zip` |
 | `just apply` | healthy LocalStack, zips, Terraform `>= 1.5` | `.localstack.env`, unhealthy edge, missing zips, `terraform` |
+| `just warmup` | prior apply (tfstate + healthy edge) | `.localstack.env`, missing state, `terraform` / `uv` |
 | `just outputs` | prior apply (local `infra/terraform.tfstate`) | `terraform`, missing state |
-| `just deploy` | same as the four steps above | same as each step |
+| `just deploy` | same as up + package + apply + outputs | same as each step |
 | `just upload-watch <image>` | prior apply; `$API_BASE` or tfstate | missing image / `API_BASE` / state; non-zero on fail/timeout |
 | `just download-job <job_id>` | prior apply; complete sizes on the job | missing job / no complete sizes / S3 get failure |
 | `just admin-status` | healthy LocalStack + prior apply (tfstate / env) | edge down, missing queues/table/buckets, missing state |
@@ -39,6 +40,8 @@ Env notes:
 - `just apply` passes `localstack_endpoint` and host-matched `lambda_architectures` — do not hand-roll those vars
 - Plain `terraform` is the supported apply path (`tflocal` optional / not required)
 - `just outputs` prints `API_BASE=...` and an `export API_BASE=...` line for the shell
+
+`just apply` and `just deploy` end with `just warmup`: dummy-invoke create_job, get_job, dispatcher, and worker so the first `just bench` / `just upload-watch` is not four Docker cold starts. Failed dummy invokes are ignored. Re-run `just warmup` after a long idle if LocalStack recycled the containers.
 
 Teardown (this worktree only): `just localstack-down` then `just localstack-assert-clean` before PRs — see [`dev-lifecycle.md`](dev-lifecycle.md) / [`pull-requests.md`](pull-requests.md).
 
@@ -70,7 +73,7 @@ What it does:
 
 1. Starts LocalStack for this worktree (`just localstack-up`), or reuses a healthy instance.
 2. Runs `just package` (Lambda zips as available; host-native Linux wheels).
-3. Runs `just apply` (`scripts/terraform-apply.sh`) — same init/apply flags as the happy path.
+3. Runs `just apply` (`scripts/terraform-apply.sh` then `just warmup`) — same init/apply flags as the happy path, then dummy-invokes the four Lambdas so the first e2e invoke is not a cold start.
 4. `uv run python -m pytest test/e2e/ -m e2e`.
 5. Tears down LocalStack if the harness started it, or always when `CI` / `GITHUB_ACTIONS` is set.
 
@@ -121,7 +124,7 @@ Terraform worker event source mapping stays `batch_size = 1` (spec). Compose env
 
 Working directory: `infra/`.
 
-Provider is wired to LocalStack endpoints in `infra/providers.tf` (not real AWS). **Canonical apply:** `just apply` (after `just localstack-up` and `just package`). Plain `terraform` under the hood — `tflocal` is optional and not required.
+Provider is wired to LocalStack endpoints in `infra/providers.tf` (not real AWS). **Canonical apply:** `just apply` (after `just localstack-up` and `just package`). Plain `terraform` under the hood — `tflocal` is optional and not required. `just apply` then runs `just warmup`.
 
 `just apply` runs `terraform init` + `apply -auto-approve` with:
 
@@ -489,9 +492,10 @@ Loaded by `thumbnail_api.config.get_config()` (`src/thumbnail_api/config/types.p
 | `infra/lambda_api.tf` | create_job / get_job Lambda functions + env |
 | `infra/lambda_pipeline.tf` | dispatcher (+ S3 notification) + worker (+ SQS ESM, batch size 1) |
 | `infra/api_gateway.tf` | REST API + `AWS_PROXY` for `POST /jobs` and `GET /jobs/{job_id}` |
-| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `outputs` / `deploy` / `upload-watch` / `download-job` / `admin-status` |
+| `justfile` | Recipes: `localstack-up` / `package` / `apply` / `warmup` / `outputs` / `deploy` / `upload-watch` / `download-job` / `admin-status` |
 | `scripts/package-lambda.sh` | `just package` — incremental `dist/lambda/*.zip` |
-| `scripts/terraform-apply.sh` | `just apply` — terraform init/apply vs LocalStack |
+| `scripts/terraform-apply.sh` | terraform init/apply vs LocalStack (`just apply` then runs warmup) |
+| `scripts/warmup-lambdas.sh` | `just warmup` — dummy-invoke the four Lambdas (failures ignored) |
 | `scripts/show-outputs.sh` | `just outputs` — print `API_BASE` + key outputs |
 | `src/thumbnail_api/cli/` | `just upload-watch` / `just download-job` / `just admin-status` (`python -m thumbnail_api.cli`) |
 | `scripts/lib/prereqs.sh` | Shared Docker / terraform prerequisite checks |

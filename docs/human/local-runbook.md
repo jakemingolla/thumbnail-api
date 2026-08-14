@@ -24,12 +24,12 @@ just install
 just deploy
 ```
 
-That one-shot recipe starts LocalStack (Compose), builds Lambda zips, applies Terraform against the local edge, and prints outputs. Equivalent step-by-step:
+That one-shot recipe starts LocalStack (Compose), builds Lambda zips, applies Terraform against the local edge, dummy-invokes the four Lambdas (warmup), and prints outputs. Equivalent step-by-step:
 
 ```bash
 just localstack-up   # allocate ports/names for this checkout, start, wait healthy
 just package         # Lambda zips → dist/lambda/ (skips zip rewrite if payload unchanged)
-just apply           # terraform init + apply against LocalStack
+just apply           # terraform init + apply, then warmup
 just outputs         # print API_BASE and other key outputs
 ```
 
