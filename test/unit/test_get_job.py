@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from thumbnail_api.handlers.get_job import handle_get_job, handler
@@ -139,6 +140,7 @@ def test_handle_get_job_returns_400_when_path_param_missing() -> None:
 
 def test_handler_maps_unexpected_errors_to_500(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     def boom(**_kwargs: object) -> object:
         msg = "config failed"
@@ -146,9 +148,11 @@ def test_handler_maps_unexpected_errors_to_500(
 
     monkeypatch.setattr("thumbnail_api.handlers.get_job.get_config", boom)
 
-    response = handler(_event(_JOB_ID), None)
+    with caplog.at_level(logging.ERROR):
+        response = handler(_event(_JOB_ID), None)
 
     assert response["statusCode"] == 500
     assert json.loads(response["body"]) == {
         "error": {"code": "internal_error", "message": "Unexpected error"},
     }
+    assert any(record.exc_info is not None for record in caplog.records)
