@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from thumbnail_api.cli.admin_status import main as admin_status_main
+from thumbnail_api.cli.bench import main as bench_main
 from thumbnail_api.cli.download_job import main as download_job_main
 from thumbnail_api.cli.style import eprint
 from thumbnail_api.cli.upload_watch import main as upload_watch_main
@@ -15,12 +16,15 @@ def _usage(*, error: bool) -> int:
     print()
     print("commands:")
     print("  admin-status   SQS / DynamoDB / S3 snapshot with ASCII graphs")
+    print("  bench          Time POST / PUT / poll-to-complete across N runs")
     print("  upload-watch   Create job → PUT image → poll until terminal")
     print("  download-job   GET job → write {size}.jpg from output bucket")
     print()
     print("examples:")
     print("  python -m thumbnail_api.cli admin-status")
     print("  python -m thumbnail_api.cli admin-status --watch")
+    print("  python -m thumbnail_api.cli bench")
+    print("  python -m thumbnail_api.cli bench ./photo.jpg --runs 5 --warmup 1")
     print("  python -m thumbnail_api.cli upload-watch ./photo.jpg")
     print("  python -m thumbnail_api.cli download-job <job_id>")
     return 2 if error else 0
@@ -36,13 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     command = args[0]
     if command == "admin-status":
         return admin_status_main(args[1:])
+    if command == "bench":
+        return bench_main(args[1:])
     if command == "upload-watch":
         return upload_watch_main(args[1:])
     if command == "download-job":
         return download_job_main(args[1:])
 
     eprint(f"error: unknown command {command!r}")
-    eprint("known commands: admin-status, download-job, upload-watch")
+    eprint("known commands: admin-status, bench, download-job, upload-watch")
     return 2
 
 

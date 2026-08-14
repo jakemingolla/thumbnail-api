@@ -98,7 +98,7 @@ while true; do
   STATUS=$(curl -sS "$API_BASE/jobs/$JOB_ID")
   echo "$STATUS" | jq -c '{status, sizes}'
   echo "$STATUS" | jq -e '.status == "complete" or .status == "failed"' >/dev/null && break
-  sleep 1
+  sleep 0.2
 done
 ```
 
@@ -107,6 +107,20 @@ done
 Allowed `content_type` values: `image/jpeg`, `image/png`, `image/webp`. The PUT `Content-Type` must match what you sent on create.
 
 Browse the contract in a browser (no LocalStack required): `just swagger`.
+
+Or skip the curl loop: `just upload-watch ./photo.jpg` polls every 0.2s until every size is terminal.
+
+## Benchmark local job latency
+
+After `just deploy` (or `apply` + warmup):
+
+```bash
+just bench                  # synthetic 1280x720 JPEG, 5 timed runs, 1 discarded warmup
+just bench ./photo.jpg --runs 5 --warmup 1
+just bench --json --label after-esm
+```
+
+Each run reports `post_ms` (POST /jobs), `put_ms` (presigned PUT), `upload_to_complete_ms` (PUT finished → terminal), `e2e_ms`, and `status`, plus min/median/max for `post_ms` and `upload_to_complete_ms`. Default poll interval is 0.05s so the timer is not quantized to 1s. Compare before/after a stack change with `--label` and `--json`.
 
 ## LocalStack S3 / presign note
 
