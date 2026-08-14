@@ -15,6 +15,7 @@ from thumbnail_api.config.types import DEFAULT_THUMBNAIL_SIZES, Config
 from thumbnail_api.handlers import worker as worker_module
 from thumbnail_api.handlers.worker import (
     DEFAULT_MAX_RECEIVE_COUNT,
+    JobPendingError,
     MalformedMessageError,
     handle_worker,
     handler,
@@ -376,6 +377,23 @@ def test_exhausted_retries_marks_failed_then_raises(
 
     assert deps["fails"]
     assert deps["jobs"][_JOB_ID]["sizes"][str(_SIZE)]["status"] == "failed"
+
+
+def test_pending_job_does_not_claim(deps: dict[str, Any]) -> None:
+    deps["jobs"][_JOB_ID] = _job(status="pending")
+
+    with pytest.raises(JobPendingError):
+        handle_worker(
+            _sqs_event(_valid_body()),
+            config=deps["config"],
+            s3_client=deps["s3_client"],
+            dynamodb_client=deps["dynamodb_client"],
+        )
+
+    assert deps["claims"] == []
+    assert deps["completes"] == []
+    assert deps["fails"] == []
+    assert deps["puts"] == []
 
 
 def test_terminal_size_is_noop(deps: dict[str, Any]) -> None:
