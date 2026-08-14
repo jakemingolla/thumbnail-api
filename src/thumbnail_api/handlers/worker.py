@@ -49,6 +49,7 @@ def reset_handler_runtime() -> None:
     """Clear cached Config/clients so tests can monkeypatch factories."""
     _runtime.reset()
 
+
 _PERMANENT_S3_ERROR_CODES = frozenset(
     {
         "NoSuchKey",
