@@ -35,6 +35,8 @@ just outputs         # print API_BASE and other key outputs
 
 `just package` reinstalls Linux wheels only when `uv.lock` / platform / Python version change. Unchanged payload skips rewriting the zips so Terraform does not replace the functions (another cold start).
 
+Compose ESM poller settings (`LAMBDA_EVENT_SOURCE_MAPPING_POLL_INTERVAL_SEC=0.1` and `LAMBDA_EVENT_SOURCE_MAPPING_MAX_BACKOFF_ON_EMPTY_POLL_SEC=0.5`) live in `docker-compose.yml`. Changing them requires recreating LocalStack: `just localstack-down` then `just localstack-up` — `just apply` is not enough.
+
 Each checkout gets its own LocalStack ports and names (safe if you have multiple worktrees). After `localstack-up`, load the generated env when you need the edge URL or AWS CLI against LocalStack:
 
 ```bash

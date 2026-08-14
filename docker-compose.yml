@@ -14,6 +14,10 @@ services:
       # Limit to services this project needs (community/free tier).
       - SERVICES=s3,lambda,sqs,dynamodb,apigateway,iam
       - DOCKER_HOST=unix:///var/run/docker.sock
+      # LocalStack ESM v2 poller (not the AWS batch_size resource). Recreate
+      # the container for these to take effect: just localstack-down && just localstack-up.
+      - LAMBDA_EVENT_SOURCE_MAPPING_POLL_INTERVAL_SEC=0.1
+      - LAMBDA_EVENT_SOURCE_MAPPING_MAX_BACKOFF_ON_EMPTY_POLL_SEC=0.5
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
