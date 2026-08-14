@@ -61,6 +61,9 @@ def resize_to_jpeg(image_bytes: bytes, max_size: int) -> bytes:
     except UnidentifiedImageError as exc:
         msg = "input is not a recognized image"
         raise ImageProcessingError(msg) from exc
+    except Image.DecompressionBombError as exc:
+        msg = "input is not a recognized image"
+        raise ImageProcessingError(msg) from exc
     except OSError as exc:
         msg = f"failed to process image: {exc}"
         raise ImageProcessingError(msg) from exc

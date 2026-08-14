@@ -78,3 +78,13 @@ def test_resize_to_jpeg_rejects_invalid_max_size(max_size: int) -> None:
 
     with pytest.raises(ImageProcessingError, match="max_size"):
         resize_to_jpeg(source, max_size=max_size)
+
+
+def test_resize_to_jpeg_maps_decompression_bomb_to_processing_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1)
+    source = _png_bytes(16, 16)
+
+    with pytest.raises(ImageProcessingError):
+        resize_to_jpeg(source, max_size=128)
