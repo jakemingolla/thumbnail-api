@@ -73,15 +73,21 @@ swagger port="8090":
 package: uv
     ./scripts/package-lambda.sh
 
-# terraform init + apply against this worktree's LocalStack (needs localstack-up + package)
+# terraform init + apply, then warmup the four Lambdas (needs localstack-up + package)
 apply:
     ./scripts/terraform-apply.sh
+    just warmup
+
+# Dummy-invoke the four Lambdas so the next bench / upload-watch is not a cold start
+warmup: uv
+    ./scripts/warmup-lambdas.sh
 
 # Print API_BASE and key Terraform outputs (needs prior just apply)
 outputs:
     ./scripts/show-outputs.sh
 
-# Happy path: localstack-up → package → apply → outputs (see docs/agents/local-deploy.md)
+# Happy path: localstack-up → package → apply (includes warmup) → outputs
+# See docs/agents/local-deploy.md.
 deploy:
     #!/usr/bin/env bash
     set -euo pipefail

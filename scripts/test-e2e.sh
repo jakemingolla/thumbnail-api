@@ -50,8 +50,8 @@ echo "e2e: credentials AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-unset} region=${AW
 echo "e2e: packaging Lambda artifacts ..."
 just package
 
-echo "e2e: terraform init + apply (endpoint=${LOCALSTACK_ENDPOINT}) ..."
-"${SCRIPT_DIR}/terraform-apply.sh"
+echo "e2e: terraform init + apply + warmup (endpoint=${LOCALSTACK_ENDPOINT}) ..."
+just apply
 
 echo "e2e: running pytest test/e2e/ ..."
 uv run python -m pytest test/e2e/ -m e2e "$@"
