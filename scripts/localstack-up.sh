@@ -99,7 +99,7 @@ for _ in $(seq 1 60); do
     ready=1
     break
   fi
-  sleep 1
+  sleep 0.2
 done
 
 if [[ "${ready}" -ne 1 ]]; then

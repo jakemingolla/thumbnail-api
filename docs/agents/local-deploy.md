@@ -108,6 +108,15 @@ Compose sets `SERVICES` to:
 
 Docker socket is mounted so Lambda can run containers.
 
+LocalStack ESM v2 poller knobs (Compose `environment`, not Terraform `batch_size`):
+
+| Variable | Value | Why |
+|----------|-------|-----|
+| `LAMBDA_EVENT_SOURCE_MAPPING_POLL_INTERVAL_SEC` | `0.1` | Poller loop interval when it is not backing off |
+| `LAMBDA_EVENT_SOURCE_MAPPING_MAX_BACKOFF_ON_EMPTY_POLL_SEC` | `0.5` | Cap empty-queue backoff (LocalStack default ramps to 10s) |
+
+Terraform worker event source mapping stays `batch_size = 1` (spec). Compose env changes need a **container recreate** (`just localstack-down` then `just localstack-up`); `just apply` is not enough.
+
 ## Terraform (`infra/`)
 
 Working directory: `infra/`.
@@ -364,6 +373,8 @@ Terraform (`infra/lambda_pipeline.tf`) also registers the worker (Pillow include
 | Timeout / memory | 30s / 512 MB (vars `worker_lambda_*`) |
 | Event source | work queue ARN, `batch_size = 1` |
 | Outputs | `worker_function_name`, `worker_function_arn`, `worker_event_source_mapping_uuid` |
+
+Local SQS→Lambda lag is dominated by LocalStack’s ESM **poller**, not this `batch_size`. Poll interval / empty-queue backoff are Compose env vars — see [Required services](#required-services). Do not raise Terraform `batch_size` (worker and spec require 1).
 
 Env matches `local.pipeline_lambda_environment` (same `Config` keys / in-Lambda `AWS_ENDPOINT_URL`).
 
