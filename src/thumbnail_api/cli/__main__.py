@@ -10,6 +10,13 @@ from thumbnail_api.cli.download_job import main as download_job_main
 from thumbnail_api.cli.style import eprint
 from thumbnail_api.cli.upload_watch import main as upload_watch_main
 
+_COMMANDS = {
+    "admin-status": admin_status_main,
+    "bench": bench_main,
+    "download-job": download_job_main,
+    "upload-watch": upload_watch_main,
+}
+
 
 def _usage(*, error: bool) -> int:
     print("usage: python -m thumbnail_api.cli <command> …")
@@ -32,24 +39,15 @@ def _usage(*, error: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if not args:
-        return _usage(error=True)
-    if args[0] in {"-h", "--help"}:
-        return _usage(error=False)
+    if not args or args[0] in {"-h", "--help"}:
+        return _usage(error=not args)
 
-    command = args[0]
-    if command == "admin-status":
-        return admin_status_main(args[1:])
-    if command == "bench":
-        return bench_main(args[1:])
-    if command == "upload-watch":
-        return upload_watch_main(args[1:])
-    if command == "download-job":
-        return download_job_main(args[1:])
-
-    eprint(f"error: unknown command {command!r}")
-    eprint("known commands: admin-status, bench, download-job, upload-watch")
-    return 2
+    handler = _COMMANDS.get(args[0])
+    if handler is None:
+        eprint(f"error: unknown command {args[0]!r}")
+        eprint(f"known commands: {', '.join(_COMMANDS)}")
+        return 2
+    return handler(args[1:])
 
 
 if __name__ == "__main__":
