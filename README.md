@@ -23,7 +23,7 @@ just install
 just test
 ```
 
-`just install` runs `uv sync --frozen`, which installs the project in editable/dev mode along with its dependencies. Run `just` with no arguments to list all recipes. Tests do not require a `.env` file.
+`just install` runs `uv sync --frozen`, which installs the project in editable/dev mode along with its dependencies. Run `just` with no arguments to list all recipes. Tests do not require a `.env` file. `just coverage` runs the same suite as `just test` with a line/branch report (terminal and `htmlcov/index.html`).
 
 ## LocalStack (local AWS)
 

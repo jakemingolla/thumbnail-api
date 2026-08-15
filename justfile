@@ -24,6 +24,10 @@ test-integration:
 # Fast tests only (unit + non-LocalStack integration). LocalStack e2e: `just test-e2e`.
 test: test-unit test-integration
 
+# Same suite as `just test`, with coverage of thumbnail_api (terminal + htmlcov/)
+coverage *args:
+    uv run python -m pytest test/unit/ test/integration/ --cov=thumbnail_api --cov-report=term-missing --cov-report=html {{args}}
+
 # LocalStack e2e harness: Compose → package → terraform apply → pytest test/e2e/
 # Slow; requires Docker + Terraform. See docs/agents/local-deploy.md.
 test-e2e:

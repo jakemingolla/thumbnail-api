@@ -2,6 +2,10 @@
 .pytest_cache
 .ruff_cache
 *.pyc
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 .env
 .localstack.env
 .localstack/
