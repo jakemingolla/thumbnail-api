@@ -33,6 +33,7 @@ def _usage(*, error: bool) -> int:
     print("  python -m thumbnail_api.cli bench")
     print("  python -m thumbnail_api.cli bench ./photo.jpg --runs 5 --warmup 1")
     print("  python -m thumbnail_api.cli upload-watch ./photo.jpg")
+    print("  python -m thumbnail_api.cli upload-watch ./photo.jpg --no-wait")
     print("  python -m thumbnail_api.cli download-job <job_id>")
     return 2 if error else 0
 

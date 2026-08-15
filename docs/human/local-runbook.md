@@ -110,6 +110,13 @@ Browse the contract in a browser (no LocalStack required): `just swagger`.
 
 Or skip the curl loop: `just upload-watch ./photo.jpg` polls every 0.2s until every size is terminal.
 
+For concurrent queue floods, skip polling so LocalStack is not hammered by `GET /jobs`:
+
+```bash
+seq 1 50 | xargs -P 5 -I{} just upload-watch ./photo.jpg --no-wait
+just admin-status --watch
+```
+
 ## Benchmark local job latency
 
 After `just deploy` (or `apply` + warmup):

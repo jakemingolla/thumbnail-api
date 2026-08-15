@@ -206,7 +206,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="upload-watch",
         description=(
             "Create a thumbnail job, upload an image via the presigned URL, "
-            "and poll until the job and every size are terminal."
+            "and poll until the job and every size are terminal "
+            "(unless --no-wait)."
         ),
     )
     parser.add_argument(
@@ -246,6 +247,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=f"Poll interval in seconds (default: {_DEFAULT_POLL_INTERVAL_SECONDS:g})",
     )
     parser.add_argument(
+        "--no-wait",
+        action="store_true",
+        help=(
+            "Create + upload only; do not poll GET /jobs "
+            "(for concurrent queue floods; use just admin-status --watch)"
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print full job JSON after a successful run",
@@ -258,10 +267,10 @@ def _validate_args(args: argparse.Namespace) -> tuple[Path, str, str, str]:
     if not image_path.is_file():
         msg = f"image not found: {image_path}"
         raise CliError(msg)
-    if args.timeout <= 0:
+    if not args.no_wait and args.timeout <= 0:
         msg = f"--timeout must be positive, got {args.timeout}"
         raise CliError(msg)
-    if args.interval <= 0:
+    if not args.no_wait and args.interval <= 0:
         msg = f"--interval must be positive, got {args.interval}"
         raise CliError(msg)
 
@@ -342,6 +351,13 @@ def _report_outcome(job_id: str, job: dict[str, Any], *, verbose: bool) -> int:
     return 1
 
 
+def _report_no_wait(job_id: str) -> int:
+    print(f"  {green('OK')}  uploaded (not waiting)")
+    print(kv("job_id", job_id))
+    print(kv("next", "just admin-status --watch"))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
@@ -352,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
             api_base=api_base,
             localstack_endpoint=localstack_endpoint,
         )
+        if args.no_wait:
+            return _report_no_wait(job_id)
         job = _poll_until_terminal(
             api_base=api_base,
             job_id=job_id,
