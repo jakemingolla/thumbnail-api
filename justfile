@@ -109,6 +109,22 @@ upload-watch image *args: uv
     fi
     uv run python -m thumbnail_api.cli upload-watch "{{image}}" {{args}}
 
+# Concurrent create+upload flood without GET /jobs poll (needs prior apply)
+# Defaults: n=50, parallelism=5. Override: just flood ./photo.jpg 100 10
+flood image n="50" parallelism="5": uv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .localstack.env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .localstack.env
+      set +a
+    fi
+    echo "flood: n={{n}} parallelism={{parallelism}} image={{image}}"
+    seq 1 "{{n}}" | xargs -P "{{parallelism}}" -I{} \
+      uv run python -m thumbnail_api.cli upload-watch "{{image}}" --no-wait
+    echo "flood: done (watch with: just admin-status --watch)"
+
 # Download complete thumbnails for JOB_ID to {size}.jpg (needs prior apply)
 # Example: just download-job "$JOB_ID" --out-dir ./thumbs
 download-job job_id *args: uv
