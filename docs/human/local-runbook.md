@@ -108,7 +108,7 @@ Allowed `content_type` values: `image/jpeg`, `image/png`, `image/webp`. The PUT 
 
 Browse the contract in a browser (no LocalStack required): `just swagger`.
 
-Or skip the curl loop: `just upload-watch ./photo.jpg` polls every 0.2s until every size is terminal.
+Or skip the curl loop: `just upload ./photo.jpg --watch` polls every 0.2s until every size is terminal. `just upload ./photo.jpg` creates the job and PUTs the image without polling.
 
 For concurrent queue floods, skip polling so LocalStack is not hammered by `GET /jobs`:
 

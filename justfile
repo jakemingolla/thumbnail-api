@@ -82,7 +82,7 @@ apply:
     ./scripts/terraform-apply.sh
     just warmup
 
-# Dummy-invoke the four Lambdas so the next bench / upload-watch is not a cold start
+# Dummy-invoke the four Lambdas so the next bench / upload is not a cold start
 warmup: uv
     ./scripts/warmup-lambdas.sh
 
@@ -100,9 +100,9 @@ deploy:
     just apply
     just outputs
 
-# Create job → PUT image → poll until all sizes terminal (needs prior apply)
-# Extra flags pass through, e.g. `just upload-watch ./photo.jpg --timeout 180`
-upload-watch image *args: uv
+# Create job → PUT image (needs prior apply). Poll with --watch.
+# Extra flags pass through, e.g. `just upload ./photo.jpg --watch --timeout 180`
+upload image *args: uv
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ -f .localstack.env ]]; then
@@ -111,7 +111,7 @@ upload-watch image *args: uv
       source .localstack.env
       set +a
     fi
-    uv run python -m thumbnail_api.cli upload-watch "{{image}}" {{args}}
+    uv run python -m thumbnail_api.cli upload "{{image}}" {{args}}
 
 # Concurrent create+upload flood without GET /jobs poll (needs prior apply)
 # Defaults: n=50, parallelism=5. Override: just flood ./photo.jpg 100 10
@@ -126,7 +126,7 @@ flood image n="50" parallelism="5": uv
     fi
     echo "flood: n={{n}} parallelism={{parallelism}} image={{image}}"
     seq 1 "{{n}}" | xargs -P "{{parallelism}}" -I{} \
-      uv run python -m thumbnail_api.cli upload-watch "{{image}}" --no-wait
+      uv run python -m thumbnail_api.cli upload "{{image}}"
     echo "flood: done (watch with: just admin-status --watch)"
 
 # Download complete thumbnails for JOB_ID to {size}.jpg (needs prior apply)

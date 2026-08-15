@@ -8,13 +8,13 @@ from thumbnail_api.cli.admin_status import main as admin_status_main
 from thumbnail_api.cli.bench import main as bench_main
 from thumbnail_api.cli.download_job import main as download_job_main
 from thumbnail_api.cli.style import eprint
-from thumbnail_api.cli.upload_watch import main as upload_watch_main
+from thumbnail_api.cli.upload import main as upload_main
 
 _COMMANDS = {
     "admin-status": admin_status_main,
     "bench": bench_main,
     "download-job": download_job_main,
-    "upload-watch": upload_watch_main,
+    "upload": upload_main,
 }
 
 
@@ -24,7 +24,7 @@ def _usage(*, error: bool) -> int:
     print("commands:")
     print("  admin-status   SQS / DynamoDB / S3 snapshot with ASCII graphs")
     print("  bench          Time POST / PUT / poll-to-complete across N runs")
-    print("  upload-watch   Create job → PUT image → poll until terminal")
+    print("  upload         Create job → PUT image (add --watch to poll)")
     print("  download-job   GET job → write {size}.jpg from output bucket")
     print()
     print("examples:")
@@ -32,8 +32,8 @@ def _usage(*, error: bool) -> int:
     print("  python -m thumbnail_api.cli admin-status --watch")
     print("  python -m thumbnail_api.cli bench")
     print("  python -m thumbnail_api.cli bench ./photo.jpg --runs 5 --warmup 1")
-    print("  python -m thumbnail_api.cli upload-watch ./photo.jpg")
-    print("  python -m thumbnail_api.cli upload-watch ./photo.jpg --no-wait")
+    print("  python -m thumbnail_api.cli upload ./photo.jpg")
+    print("  python -m thumbnail_api.cli upload ./photo.jpg --watch")
     print("  python -m thumbnail_api.cli download-job <job_id>")
     return 2 if error else 0
 
