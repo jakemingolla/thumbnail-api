@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "basedpyright>=1.39.9",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.2",
 ]
 
@@ -89,3 +90,18 @@ markers = [
     "only: run only this test (used with just test-only)",
     "e2e: LocalStack end-to-end (run via just test-e2e; not part of just test)",
 ]
+
+[tool.coverage.run]
+source = ["src/thumbnail_api"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

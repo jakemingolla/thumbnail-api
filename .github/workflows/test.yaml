@@ -12,6 +12,6 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: 🧪 Run Tests
-        run: just test
+        run: just coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

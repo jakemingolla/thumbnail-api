@@ -64,7 +64,7 @@ Reusable Compose → package → Terraform apply → pytest gate. Feature ticket
 | Tests | `test/e2e/` (`pytest` marker `e2e`) |
 | Full product path | `test/e2e/test_happy_path.py` — create → PUT → poll until `complete` + output objects |
 | CI job | `e2e` in `.github/workflows/e2e.yaml` (workflow name: `🧪 E2E (LocalStack)`) |
-| Fast suite | `just test` — unit + non-LocalStack integration only (no Docker) |
+| Fast suite | `just test` — unit + non-LocalStack integration only (no Docker). Coverage: `just coverage`. |
 
 ### Local
 

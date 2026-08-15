@@ -1,6 +1,6 @@
 # Python style (agents)
 
-How to write Python in this repo so lint/types stay clean without suppressions or defensive noise. Tooling: Ruff (`ALL` minus ignores in `pyproject.toml`), basedpyright strict, pytest via `just test-unit` / `just lint`.
+How to write Python in this repo so lint/types stay clean without suppressions or defensive noise. Tooling: Ruff (`ALL` minus ignores in `pyproject.toml`), basedpyright strict, pytest via `just test` / `just lint`. Coverage: `just coverage`.
 
 ## Prefer redesign over `# noqa`
 
@@ -31,6 +31,10 @@ Do not paper over Ruff/basedpyright with `# noqa` or broad ignore edits when the
 - Production code calls a single helper for timestamps (e.g. ISO UTC now).
 - Tests freeze that helper via `monkeypatch.setattr` — do not thread `now=` through public APIs.
 - Same idea for randomness, uuid generation, and similar: one seam, patch in tests.
+
+## Coverage
+
+`just coverage` runs the same suite as `just test` (unit + non-LocalStack integration) with pytest-cov. It prints missing lines and writes `htmlcov/index.html`. Do not fold `test/e2e/` into this recipe — those tests hit deployed Lambdas, not the local package. Config: `[tool.coverage.*]` in `pyproject.toml`.
 
 ## Quick checks before finishing a Python change
 
