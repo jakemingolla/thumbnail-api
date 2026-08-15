@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from thumbnail_api.config.types import Config
 from thumbnail_api.handlers import get_job as get_job_module
 from thumbnail_api.handlers.get_job import handle_get_job, handler
 from thumbnail_api.jobs.serde import to_item
@@ -162,3 +163,47 @@ def test_handler_maps_unexpected_errors_to_500(
         "error": {"code": "internal_error", "message": "Unexpected error"},
     }
     assert any(record.exc_info is not None for record in caplog.records)
+
+
+def test_handle_get_job_returns_400_when_job_id_not_string() -> None:
+    response = handle_get_job(
+        {"pathParameters": {"job_id": [_JOB_ID]}},
+        client=FakeDynamoDB(),
+        table_name=_TABLE,
+    )
+
+    assert response["statusCode"] == 400
+    assert json.loads(response["body"])["error"]["code"] == "invalid_job_id"
+
+
+def test_handler_wires_config_and_returns_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _job_record()
+    dynamodb = FakeDynamoDB({_JOB_ID: job})
+    config = Config(
+        environment="test",
+        input_bucket="thumbnail-input",
+        output_bucket="thumbnail-output",
+        jobs_table=_TABLE,
+        queue_url="http://127.0.0.1:4566/000000000000/thumbnail-work",
+        aws_endpoint_url="http://127.0.0.1:4566",
+    )
+    config_calls = {"n": 0}
+
+    def fake_get_config(*, env_file: object = None) -> Config:
+        del env_file
+        config_calls["n"] += 1
+        return config
+
+    def fake_get_dynamodb_client(_config: Config) -> FakeDynamoDB:
+        return dynamodb
+
+    monkeypatch.setattr(get_job_module, "get_config", fake_get_config)
+    monkeypatch.setattr(get_job_module, "get_dynamodb_client", fake_get_dynamodb_client)
+
+    first = handler(_event(_JOB_ID), None)
+    second = handler(_event(_JOB_ID), None)
+
+    assert first["statusCode"] == 200
+    assert json.loads(first["body"])["job_id"] == _JOB_ID
+    assert second["statusCode"] == 200
+    assert config_calls["n"] == 1
