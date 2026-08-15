@@ -9,7 +9,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13.5"
 dependencies = [
-    "boto3>=1.43.68",
+    "boto3>=1.43.69",
     "pillow>=12.3.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
