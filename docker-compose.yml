@@ -18,6 +18,10 @@ services:
       # the container for these to take effect: just localstack-down && just localstack-up.
       - LAMBDA_EVENT_SOURCE_MAPPING_POLL_INTERVAL_SEC=0.1
       - LAMBDA_EVENT_SOURCE_MAPPING_MAX_BACKOFF_ON_EMPTY_POLL_SEC=0.5
+      # Cap Docker Lambda fan-out / keep-alive so concurrent floods do not wedge
+      # the edge (default concurrent=1000, keepalive=10m).
+      - LAMBDA_LIMITS_CONCURRENT_EXECUTIONS=20
+      - LAMBDA_KEEPALIVE_MS=30000
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./.localstack}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
