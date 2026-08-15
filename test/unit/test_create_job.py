@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
+import uuid
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -325,3 +327,193 @@ def test_handler_wires_config_and_clients(
     assert put.call_args.args[0] is dynamodb
     presign.assert_called_once()
     assert presign.call_args.args[0] is s3
+
+
+def test_create_job_generates_uuid_job_id(
+    monkeypatch: pytest.MonkeyPatch,
+    config: Config,
+) -> None:
+    def fake_put(
+        _client: object,
+        table_name: str,
+        *,
+        job_id: str,
+        input_key: str,
+        sizes: list[int],
+    ) -> JobRecord:
+        del table_name, sizes
+        return JobRecord(
+            job_id=job_id,
+            status="pending",
+            input_key=input_key,
+            sizes={"128": {"status": "pending", "output_key": None}},
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+
+    def fake_presign(*_args: object, **_kwargs: object) -> PresignedUpload:
+        return PresignedUpload(url=_UPLOAD_URL, key=_INPUT_KEY)
+
+    monkeypatch.setattr(create_job_module, "put_pending_job", fake_put)
+    monkeypatch.setattr(create_job_module, "generate_presigned_put_url", fake_presign)
+
+    response = handle_create_job(
+        _event(),
+        config=config,
+        s3_client=MagicMock(name="s3"),
+        dynamodb_client=MagicMock(name="dynamodb"),
+    )
+
+    assert response["statusCode"] == 201
+    job_id = _body(response)["job_id"]
+    uuid.UUID(job_id)
+    assert job_id != _JOB_ID
+
+
+def test_accepts_multivalue_content_type_header(deps: dict[str, Any]) -> None:
+    event = _event(headers={})
+    event["multiValueHeaders"] = {"Content-Type": ["application/json"]}
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 201
+
+
+def test_accepts_list_valued_content_type_header(deps: dict[str, Any]) -> None:
+    event = _event()
+    event["headers"] = {"Content-Type": ["application/json"]}
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 201
+
+
+def test_skips_non_string_header_keys(deps: dict[str, Any]) -> None:
+    event = _event()
+    event["headers"] = {123: "ignored", "Content-Type": "application/json"}
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 201
+
+
+@pytest.mark.parametrize(
+    "header_value",
+    [
+        [],
+        [1],
+        1,
+    ],
+)
+def test_rejects_unusable_content_type_header_values(
+    deps: dict[str, Any],
+    header_value: object,
+) -> None:
+    event = _event()
+    event["headers"] = {"Content-Type": header_value}
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 415
+    assert _body(response)["error"]["code"] == "unsupported_media_type"
+    assert deps["put_calls"] == []
+
+
+def test_missing_body_is_invalid_json(deps: dict[str, Any]) -> None:
+    event = _event()
+    event["body"] = None
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 400
+    assert _body(response)["error"]["code"] == "invalid_json"
+    assert deps["put_calls"] == []
+
+
+def test_non_string_body_is_invalid_json(deps: dict[str, Any]) -> None:
+    event = _event()
+    event["body"] = {"content_type": "image/jpeg"}
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 400
+    assert _body(response)["error"]["code"] == "invalid_json"
+    assert deps["put_calls"] == []
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "abc",
+        base64.b64encode(b"\xff\xfe").decode("ascii"),
+    ],
+)
+def test_undecodable_base64_body_is_invalid_json(
+    deps: dict[str, Any],
+    raw: str,
+) -> None:
+    event = _event()
+    event["body"] = raw
+    event["isBase64Encoded"] = True
+
+    response = handle_create_job(
+        event,
+        config=deps["config"],
+        s3_client=deps["s3_client"],
+        dynamodb_client=deps["dynamodb_client"],
+    )
+
+    assert response["statusCode"] == 400
+    assert _body(response)["error"]["code"] == "invalid_json"
+    assert deps["put_calls"] == []
+
+
+def test_handler_maps_unexpected_errors_to_500(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def boom(*, env_file: object = None) -> Config:
+        del env_file
+        msg = "config failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(create_job_module, "get_config", boom)
+
+    with caplog.at_level(logging.ERROR):
+        response = handler(_event(), None)
+
+    assert response["statusCode"] == 500
+    assert _body(response) == {
+        "error": {"code": "internal_error", "message": "Unexpected error"},
+    }
+    assert any(record.exc_info is not None for record in caplog.records)
