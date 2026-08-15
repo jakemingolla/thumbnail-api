@@ -31,6 +31,7 @@ just deploy          # localstack-up → package → apply (warmup) → outputs
 | `just deploy` | same as up + package + apply + outputs | same as each step |
 | `just bench` | prior apply; `$API_BASE` or tfstate | missing `API_BASE` / state; non-zero if a timed run is not `complete` |
 | `just upload-watch <image>` | prior apply; `$API_BASE` or tfstate | missing image / `API_BASE` / state; non-zero on fail/timeout |
+| `just upload-watch <image> --no-wait` | same | create + PUT only (no GET poll); for concurrent floods |
 | `just download-job <job_id>` | prior apply; complete sizes on the job | missing job / no complete sizes / S3 get failure |
 | `just admin-status` | healthy LocalStack + prior apply (tfstate / env) | edge down, missing queues/table/buckets, missing state |
 
@@ -270,6 +271,7 @@ just upload-watch ./path/to/photo.jpg
 # Uses $API_BASE / $LOCALSTACK_ENDPOINT when set; otherwise terraform outputs.
 # Optional flags: just upload-watch ./path/to/photo.jpg --timeout 180 --verbose
 # Default poll interval is 0.2s (`--interval`).
+# Create + upload only (no GET poll): just upload-watch ./path/to/photo.jpg --no-wait
 
 # Latency: POST / PUT / poll-to-complete (synthetic 1280x720 JPEG if no path)
 just bench
