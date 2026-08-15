@@ -118,6 +118,8 @@ LocalStack ESM v2 poller knobs (Compose `environment`, not Terraform `batch_size
 |----------|-------|-----|
 | `LAMBDA_EVENT_SOURCE_MAPPING_POLL_INTERVAL_SEC` | `0.1` | Poller loop interval when it is not backing off |
 | `LAMBDA_EVENT_SOURCE_MAPPING_MAX_BACKOFF_ON_EMPTY_POLL_SEC` | `0.5` | Cap empty-queue backoff (LocalStack default ramps to 10s) |
+| `LAMBDA_LIMITS_CONCURRENT_EXECUTIONS` | `20` | Cap simultaneous Docker Lambda envs (LocalStack default 1000 wedges the edge under floods) |
+| `LAMBDA_KEEPALIVE_MS` | `30000` | Reap idle Lambda containers after 30s (LocalStack default 10m) |
 
 Terraform worker event source mapping stays `batch_size = 1` (spec). Compose env changes need a **container recreate** (`just localstack-down` then `just localstack-up`); `just apply` is not enough.
 
