@@ -1,4 +1,4 @@
-"""Create a job, upload an image, and poll until every size is terminal."""
+"""Create a job, upload an image, and optionally poll until every size is terminal."""
 
 from __future__ import annotations
 
@@ -203,11 +203,10 @@ def _poll_until_terminal(
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="upload-watch",
+        prog="upload",
         description=(
-            "Create a thumbnail job, upload an image via the presigned URL, "
-            "and poll until the job and every size are terminal "
-            "(unless --no-wait)."
+            "Create a thumbnail job and upload an image via the presigned URL. "
+            "With --watch, poll until the job and every size are terminal."
         ),
     )
     parser.add_argument(
@@ -235,23 +234,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override Content-Type (default: infer from image extension)",
     )
     parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Poll GET /jobs until every size is terminal",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=_DEFAULT_TIMEOUT_SECONDS,
-        help=f"Poll timeout in seconds (default: {_DEFAULT_TIMEOUT_SECONDS:g})",
+        help=f"Poll timeout in seconds when --watch is set (default: {_DEFAULT_TIMEOUT_SECONDS:g})",
     )
     parser.add_argument(
         "--interval",
         type=float,
         default=_DEFAULT_POLL_INTERVAL_SECONDS,
-        help=f"Poll interval in seconds (default: {_DEFAULT_POLL_INTERVAL_SECONDS:g})",
-    )
-    parser.add_argument(
-        "--no-wait",
-        action="store_true",
         help=(
-            "Create + upload only; do not poll GET /jobs "
-            "(for concurrent queue floods; use just admin-status --watch)"
+            f"Poll interval in seconds when --watch is set "
+            f"(default: {_DEFAULT_POLL_INTERVAL_SECONDS:g})"
         ),
     )
     parser.add_argument(
@@ -267,10 +266,10 @@ def _validate_args(args: argparse.Namespace) -> tuple[Path, str, str, str]:
     if not image_path.is_file():
         msg = f"image not found: {image_path}"
         raise CliError(msg)
-    if not args.no_wait and args.timeout <= 0:
+    if args.watch and args.timeout <= 0:
         msg = f"--timeout must be positive, got {args.timeout}"
         raise CliError(msg)
-    if not args.no_wait and args.interval <= 0:
+    if args.watch and args.interval <= 0:
         msg = f"--interval must be positive, got {args.interval}"
         raise CliError(msg)
 
@@ -287,7 +286,7 @@ def _create_and_upload(
     api_base: str,
     localstack_endpoint: str,
 ) -> str:
-    print(heading("upload-watch"))
+    print(heading("upload"))
     print(kv("api", api_base))
     print(kv("image", f"{image_path}  {dim(f'({content_type})')}"))
     print()
@@ -351,8 +350,8 @@ def _report_outcome(job_id: str, job: dict[str, Any], *, verbose: bool) -> int:
     return 1
 
 
-def _report_no_wait(job_id: str) -> int:
-    print(f"  {green('OK')}  uploaded (not waiting)")
+def _report_upload_only(job_id: str) -> int:
+    print(f"  {green('OK')}  uploaded")
     print(kv("job_id", job_id))
     print(kv("next", "just admin-status --watch"))
     return 0
@@ -368,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:
             api_base=api_base,
             localstack_endpoint=localstack_endpoint,
         )
-        if args.no_wait:
-            return _report_no_wait(job_id)
+        if not args.watch:
+            return _report_upload_only(job_id)
         job = _poll_until_terminal(
             api_base=api_base,
             job_id=job_id,

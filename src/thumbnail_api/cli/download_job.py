@@ -148,7 +148,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "to {size}.jpg (via LocalStack S3)."
         ),
     )
-    parser.add_argument("job_id", help="Job UUID from POST /jobs or upload-watch")
+    parser.add_argument("job_id", help="Job UUID from POST /jobs or upload")
     parser.add_argument(
         "--out-dir",
         type=Path,
